@@ -1,0 +1,221 @@
+/*
+ * ZAP design tokens (design.md §2–§4, §7).
+ * The only file allowed to contain raw color values.
+ * Dark is the default; Light overrides via [data-theme="light"] on <html>.
+ */
+
+:root {
+  /* Core */
+  --azure: #3283be;
+  --snow: #fefdfe;
+  --coral: #fd614b;
+
+  /* Derived blues (depth) */
+  --azure-700: #1f5f94;
+  --azure-800: #17487a;
+  --azure-900: #0f3157;
+  --azure-300: #7db4dd;
+
+  /* Ink for text on coral / light surfaces (AA-safe) */
+  --ink: #0b2540;
+
+  /* Derived coral */
+  --coral-600: #e84a34;
+  --coral-700: #c93a27;
+  --coral-glow: rgba(253, 97, 75, 0.45);
+  --coral-ring: rgba(253, 97, 75, 0.6);
+
+  /* Status (theme-independent) */
+  --success: #4ade80;
+  --warning: #fbbf24;
+
+  /* Windows caption close button (explicitly reddish per spec) */
+  --caption-close: #c42b1c;
+  --caption-close-fg: var(--snow);
+
+  /* Radius */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+  --r-full: 999px;
+
+  /* Elevation */
+  --shadow-card: 0 8px 32px rgba(8, 30, 60, 0.28);
+  --shadow-pop: 0 16px 48px rgba(8, 30, 60, 0.4);
+  --shadow-coral: 0 0 24px var(--coral-glow);
+  --ring-focus: 0 0 0 2px var(--coral-ring), 0 0 16px var(--coral-glow);
+
+  /* Typography */
+  --font-sans: "Inter Variable", system-ui, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "Cascadia Code", Consolas, monospace;
+  --chat-font-size: 16px;
+  --chat-line-height: 26px;
+
+  /* Motion */
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-state: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-hover: 120ms;
+  --dur-pop: 180ms;
+  --dur-theme: 200ms;
+  --dur-modal: 260ms;
+  --dur-message: 220ms;
+
+  /* Layout */
+  --titlebar-h: 40px;
+  --sidebar-w: 280px;
+  --content-w: 760px;
+  --chat-item-h: 44px;
+  --message-gap: 24px;
+
+  /* Dot grid (design.md §2.2) */
+  --dot-size: 8px;
+  /* Eased fade for the app-wide dot grid: strongest at the top glow, gone
+     well before the message area (keeps it under 12 % behind text). */
+  --dot-fade: radial-gradient(
+    ellipse 95% 75% at 50% 0%,
+    rgb(0 0 0 / 100%) 0%,
+    rgb(0 0 0 / 72%) 22%,
+    rgb(0 0 0 / 42%) 42%,
+    rgb(0 0 0 / 18%) 62%,
+    rgb(0 0 0 / 5%) 80%,
+    rgb(0 0 0 / 0%) 100%
+  );
+
+  /* Fine grain that dithers the large dark gradient so it shows no banding
+     (8-bit displays). Grey noise, blended at very low opacity. */
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --noise-opacity: 0.045;
+}
+
+/* ------------------------------------------------------------- Dark (default) */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a1f36;
+  /* design.md colors (#17487A → #0F3157 → #0A1F36), stretched over the full
+     window height with intermediate stops so there is no visible edge. */
+  --bg-gradient: radial-gradient(
+    ellipse 135% 100% at 50% -6%,
+    #17487a 0%,
+    #143f6d 18%,
+    #113861 34%,
+    #0f3157 48%,
+    #0e2c4d 63%,
+    #0c2643 80%,
+    #0a1f36 100%
+  );
+  --surface-sidebar: rgba(15, 49, 87, 0.55);
+  --surface-1: rgba(254, 253, 254, 0.05);
+  --surface-2: rgba(254, 253, 254, 0.09);
+  --surface-3: rgba(254, 253, 254, 0.14);
+  --border: rgba(254, 253, 254, 0.12);
+  --border-strong: rgba(254, 253, 254, 0.24);
+  --fg: var(--snow);
+  --fg-muted: rgba(254, 253, 254, 0.72);
+  --fg-subtle: rgba(254, 253, 254, 0.5);
+  --dot: rgba(254, 253, 254, 0.16);
+  --accent: var(--coral);
+  --accent-hover: var(--coral-600);
+  --accent-pressed: var(--coral-700);
+  --on-accent: var(--ink);
+  --selection: rgba(50, 131, 190, 0.45);
+
+  --glass: rgba(254, 253, 254, 0.08);
+  --glass-strong: rgba(254, 253, 254, 0.14);
+  --glass-border: rgba(254, 253, 254, 0.22);
+  --glass-blur: 18px;
+
+  --danger: #ff8a7a;
+
+  /* Derived surfaces (tints of --azure-900 / --snow) */
+  --surface-popover: rgba(15, 49, 87, 0.94);
+  --scrim: rgba(8, 30, 60, 0.55);
+  --code-bg: rgba(15, 49, 87, 0.8);
+  --code-header: rgba(254, 253, 254, 0.04);
+  --link: var(--coral);
+  --link-underline: var(--fg-muted);
+  --shimmer: rgba(254, 253, 254, 0.45);
+  --skeleton: rgba(254, 253, 254, 0.07);
+  --skeleton-shine: rgba(254, 253, 254, 0.12);
+  /* Diff lines in file approval cards (status green / danger tints) */
+  --diff-add: rgba(74, 222, 128, 0.14);
+  --diff-del: rgba(255, 138, 122, 0.16);
+
+  /* Syntax: white/azure-300 base, coral keywords */
+  --shiki-foreground: var(--snow);
+  --shiki-background: transparent;
+  --shiki-token-constant: var(--azure-300);
+  --shiki-token-string: var(--azure-300);
+  --shiki-token-string-expression: var(--azure-300);
+  --shiki-token-comment: var(--fg-subtle);
+  --shiki-token-keyword: var(--coral);
+  --shiki-token-parameter: var(--snow);
+  --shiki-token-function: var(--snow);
+  --shiki-token-punctuation: var(--fg-muted);
+  --shiki-token-link: var(--azure-300);
+}
+
+/* ----------------------------------------------------------------- Light */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f8fc;
+  --bg-gradient: radial-gradient(
+    ellipse 135% 100% at 50% -6%,
+    #dcebf7 0%,
+    #e8f2fa 30%,
+    #f3f8fc 60%,
+    #f9fbfd 80%,
+    #fefdfe 100%
+  );
+  --noise-opacity: 0.025;
+  --surface-sidebar: rgba(254, 253, 254, 0.7);
+  --surface-1: rgba(11, 37, 64, 0.04);
+  --surface-2: rgba(11, 37, 64, 0.07);
+  --surface-3: rgba(11, 37, 64, 0.11);
+  --border: rgba(11, 37, 64, 0.12);
+  --border-strong: rgba(11, 37, 64, 0.24);
+  --fg: var(--ink);
+  --fg-muted: rgba(11, 37, 64, 0.72);
+  --fg-subtle: rgba(11, 37, 64, 0.52);
+  --dot: rgba(11, 37, 64, 0.1);
+  --selection: rgba(50, 131, 190, 0.3);
+
+  --glass: rgba(254, 253, 254, 0.7);
+  --glass-strong: rgba(254, 253, 254, 0.9);
+  --glass-border: rgba(11, 37, 64, 0.12);
+
+  /* --danger (#FF8A7A) is ~2:1 on light; a deeper tint keeps icons ≥ 3:1 */
+  --danger: #b8392a;
+
+  --surface-popover: rgba(254, 253, 254, 0.97);
+  --scrim: rgba(11, 37, 64, 0.3);
+  --code-bg: rgba(11, 37, 64, 0.05);
+  --code-header: rgba(11, 37, 64, 0.04);
+  --link: var(--coral-700);
+  --link-underline: var(--fg-subtle);
+  --shimmer: rgba(254, 253, 254, 0.6);
+  --skeleton: rgba(11, 37, 64, 0.06);
+  --skeleton-shine: rgba(11, 37, 64, 0.1);
+  --diff-add: rgba(22, 163, 74, 0.14);
+  --diff-del: rgba(184, 57, 42, 0.12);
+  --shadow-card: 0 8px 32px rgba(11, 37, 64, 0.1);
+  --shadow-pop: 0 16px 48px rgba(11, 37, 64, 0.18);
+
+  --shiki-foreground: var(--ink);
+  --shiki-token-constant: var(--azure-700);
+  --shiki-token-string: var(--azure-700);
+  --shiki-token-string-expression: var(--azure-700);
+  --shiki-token-comment: var(--fg-subtle);
+  --shiki-token-keyword: var(--coral-700);
+  --shiki-token-parameter: var(--ink);
+  --shiki-token-function: var(--azure-900);
+  --shiki-token-punctuation: var(--fg-muted);
+  --shiki-token-link: var(--azure-700);
+}
+
+/* ---------------------------------------------------------------- Density */
+[data-density="compact"] {
+  --chat-item-h: 36px;
+  --message-gap: 16px;
+}

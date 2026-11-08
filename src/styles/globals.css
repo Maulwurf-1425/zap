@@ -1,0 +1,855 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Map design tokens into Tailwind. The default palette is removed so only
+   token colors exist as utilities. */
+@theme inline {
+  --color-*: initial;
+  --color-azure: var(--azure);
+  --color-azure-300: var(--azure-300);
+  --color-azure-700: var(--azure-700);
+  --color-azure-800: var(--azure-800);
+  --color-azure-900: var(--azure-900);
+  --color-snow: var(--snow);
+  --color-coral: var(--coral);
+  --color-coral-600: var(--coral-600);
+  --color-coral-700: var(--coral-700);
+  --color-ink: var(--ink);
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-sidebar: var(--surface-sidebar);
+  --color-popover: var(--surface-popover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-glass-border: var(--glass-border);
+  --color-code: var(--code-bg);
+  --color-link: var(--link);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-full: var(--r-full);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-coral: var(--shadow-coral);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --ease-enter: var(--ease-enter);
+  --ease-state: var(--ease-state);
+
+  /* Type scale (design.md §3) */
+  --text-display: 64px;
+  --text-display--line-height: 64px;
+  --text-display--letter-spacing: -0.03em;
+  --text-display--font-weight: 300;
+  --text-h1: 32px;
+  --text-h1--line-height: 38px;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h1--font-weight: 400;
+  --text-h2: 22px;
+  --text-h2--line-height: 28px;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h2--font-weight: 500;
+  --text-body: 16px;
+  --text-body--line-height: 26px;
+  --text-ui: 14px;
+  --text-ui--line-height: 20px;
+  --text-ui--font-weight: 500;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--letter-spacing: 0.01em;
+  --text-code: 14px;
+  --text-code--line-height: 22px;
+}
+
+/* ------------------------------------------------------------------ base */
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    background: var(--bg);
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg-gradient);
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 26px;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+    transition:
+      background-color var(--dur-theme) var(--ease-state),
+      color var(--dur-theme) var(--ease-state);
+  }
+
+  /* Subtle dot grid over the whole app, strongest at the top glow,
+     fading out so it never sits visibly behind long text (< 12 %). */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(var(--dot) 1.1px, transparent 1.3px);
+    background-size: var(--dot-size) var(--dot-size);
+    opacity: 0.5;
+    mask-image: var(--dot-fade);
+  }
+
+  /* Grain against banding. On <html>, so it paints above the page
+     background but below the dot grid and the whole UI. */
+  html::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--noise);
+    background-size: 160px 160px;
+    opacity: var(--noise-opacity);
+    mix-blend-mode: overlay;
+  }
+
+  .selectable,
+  input,
+  textarea {
+    user-select: text;
+  }
+
+  ::selection {
+    background: var(--selection);
+  }
+
+  :focus {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--coral-ring);
+    outline-offset: 2px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: default;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--surface-2);
+    border-radius: var(--r-full);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--surface-3);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* ------------------------------------------------------------ components */
+
+@layer components {
+  .glass {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+    box-shadow: var(--shadow-card);
+    border-radius: var(--r-lg);
+  }
+
+  .popover {
+    background: var(--surface-popover);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+    box-shadow: var(--shadow-pop);
+    color: var(--fg);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
+    border-radius: var(--r-md);
+    white-space: nowrap;
+    transition:
+      background-color var(--dur-hover) var(--ease-state),
+      box-shadow var(--dur-hover) var(--ease-state),
+      border-color var(--dur-hover) var(--ease-state),
+      color var(--dur-hover) var(--ease-state),
+      opacity var(--dur-hover) var(--ease-state),
+      transform var(--dur-hover) var(--ease-state);
+  }
+  .btn:disabled {
+    opacity: 0.4;
+  }
+
+  .btn-primary {
+    height: 44px;
+    padding: 0 20px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .btn-primary:not(:disabled):hover {
+    background: var(--accent-hover);
+    box-shadow: var(--shadow-coral);
+  }
+  .btn-primary:not(:disabled):active {
+    background: var(--accent-pressed);
+    box-shadow: var(--shadow-coral);
+    transform: scale(0.98);
+  }
+
+  .btn-secondary {
+    height: 36px;
+    padding: 0 14px;
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    color: var(--fg);
+  }
+  .btn-secondary:not(:disabled):hover {
+    border-color: var(--border-strong);
+    background: var(--surface-3);
+  }
+
+  .btn-ghost {
+    height: 36px;
+    padding: 0 12px;
+    background: transparent;
+    color: var(--fg);
+  }
+  .btn-ghost:not(:disabled):hover {
+    background: var(--surface-2);
+  }
+
+  .btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--fg-muted);
+  }
+  .btn-icon:not(:disabled):hover,
+  .btn-icon[data-state="open"] {
+    background: var(--surface-2);
+    color: var(--fg);
+  }
+
+  .input {
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    border-radius: var(--r-md);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    font-size: 14px;
+    transition:
+      border-color var(--dur-hover) var(--ease-state),
+      box-shadow var(--dur-hover) var(--ease-state);
+  }
+  .input::placeholder {
+    color: var(--fg-subtle);
+  }
+  .input:hover {
+    border-color: var(--border-strong);
+  }
+  .input:focus-visible {
+    outline: none;
+    border-color: var(--coral-ring);
+    box-shadow: var(--ring-focus);
+  }
+
+  .composer:focus-within {
+    box-shadow: var(--ring-focus), var(--shadow-card);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--r-full);
+    flex: none;
+  }
+
+  /* Menu / list rows used by dropdowns, popovers and the palette */
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 36px;
+    padding: 0 10px;
+    border-radius: var(--r-sm);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
+    color: var(--fg);
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+  }
+  .menu-item[data-highlighted],
+  .menu-item[data-selected="true"],
+  .menu-item:hover {
+    background: var(--surface-2);
+  }
+  .menu-item[data-disabled] {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--fg-muted);
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--skeleton);
+    border-radius: var(--r-sm);
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+    animation: shimmer 1.4s linear infinite;
+  }
+}
+
+/* ------------------------------------------------------------- title bar */
+
+.caption-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: var(--titlebar-h);
+  color: var(--fg-muted);
+  transition:
+    background-color var(--dur-hover) var(--ease-state),
+    color var(--dur-hover) var(--ease-state);
+}
+.caption-btn:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+.caption-btn:active {
+  background: var(--surface-3);
+}
+.caption-btn.close:hover,
+.caption-btn.close:focus-visible {
+  background: var(--caption-close);
+  color: var(--caption-close-fg);
+}
+.caption-btn:focus-visible {
+  outline-offset: -2px;
+}
+
+/* --------------------------------------------------------- dot-grid hero */
+
+.dot-field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--dot) 1.1px, transparent 1.3px);
+  background-size: var(--dot-size) var(--dot-size);
+  mask-image: radial-gradient(ellipse 55% 50% at 50% 42%, black 0%, transparent 100%);
+}
+
+/* ------------------------------------------------------------- resizing */
+
+.resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: transparent;
+  transition: background-color var(--dur-hover) var(--ease-state);
+}
+.resize-handle:hover::after,
+.resize-handle[data-active="true"]::after,
+.resize-handle:focus-visible::after {
+  background: var(--coral-ring);
+}
+
+/* ---------------------------------------------------------------- motion */
+
+@keyframes caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+@keyframes dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Centering uses the `translate` property (Tailwind v4), so the entrance
+   only animates `transform`. */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes bolt-dot {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Radix state-driven animations */
+.anim-pop[data-state="open"] {
+  animation: pop-in var(--dur-pop) var(--ease-enter);
+}
+.anim-fade[data-state="open"] {
+  animation: fade-in var(--dur-modal) var(--ease-enter);
+}
+.anim-dialog[data-state="open"] {
+  animation: dialog-in var(--dur-modal) var(--ease-enter);
+}
+
+/* Inline caret at the end of a streaming reply's last text block. */
+.markdown.streaming > :is(p, h1, h2, h3, h4, blockquote):last-child::after,
+.markdown.streaming > :is(ul, ol):last-child > li:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: -0.18em;
+  border-radius: 2px;
+  background: var(--coral);
+  box-shadow: 0 0 10px var(--coral-glow);
+  animation: caret-blink 1s var(--ease-state) infinite;
+}
+
+.pulse {
+  animation: dot-pulse 1.2s var(--ease-state) infinite;
+}
+
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--fg-muted);
+  animation: typing 1.2s var(--ease-state) infinite;
+}
+.typing-dot:nth-child(2) {
+  animation-delay: 120ms;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.bolt-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bolt-dot 420ms var(--ease-enter) both;
+}
+
+/* "ZAP is thinking": rows light up top to bottom, hold, then fade away in
+   the same order. A faint ghost keeps the bolt's outline readable. */
+@keyframes bolt-build {
+  0% {
+    opacity: 0.12;
+    transform: scale(0.45);
+  }
+  18%,
+  55% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  75%,
+  100% {
+    opacity: 0.12;
+    transform: scale(0.45);
+  }
+}
+
+@keyframes bolt-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.bolt-dot-loop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bolt-build 1.8s var(--ease-state) infinite both;
+}
+
+.progress-track {
+  position: relative;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--glass);
+  overflow: hidden;
+}
+[data-theme="light"] .progress-track {
+  background: var(--surface-2);
+}
+.progress-fill {
+  position: relative;
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--coral);
+  overflow: hidden;
+  transition: width 200ms var(--ease-state);
+}
+.progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, var(--shimmer), transparent);
+  animation: shimmer 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown.streaming > :is(p, h1, h2, h3, h4, blockquote):last-child::after,
+  .markdown.streaming > :is(ul, ol):last-child > li:last-child::after {
+    animation: none;
+  }
+  .pulse,
+  .typing-dot {
+    animation-name: caret-blink;
+  }
+  .progress-fill::after,
+  .skeleton::after {
+    animation: none;
+    display: none;
+  }
+  .bolt-dot {
+    animation: fade-in 100ms linear both;
+    animation-delay: 0ms !important;
+  }
+  /* No movement: the whole bolt just breathes. */
+  .bolt-dot-loop {
+    animation: bolt-breathe 1.6s ease-in-out infinite;
+    animation-delay: 0ms !important;
+  }
+  .anim-pop[data-state="open"],
+  .anim-fade[data-state="open"] {
+    animation: fade-in 100ms linear;
+  }
+  .anim-dialog[data-state="open"] {
+    animation: none;
+  }
+  .btn-primary:not(:disabled):active {
+    transform: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 100ms !important;
+  }
+}
+
+/* -------------------------------------------------------------- markdown */
+
+.markdown {
+  font-size: var(--chat-font-size);
+  line-height: var(--chat-line-height);
+  overflow-wrap: anywhere;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown table,
+.markdown .code-block {
+  margin: 0 0 14px;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  margin: 22px 0 10px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.markdown h1 {
+  font-size: 1.625em;
+  line-height: 1.25;
+}
+.markdown h2 {
+  font-size: 1.375em;
+  line-height: 1.3;
+}
+.markdown h3 {
+  font-size: 1.125em;
+  line-height: 1.45;
+}
+.markdown h4 {
+  font-size: 1em;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: 24px;
+}
+.markdown ul {
+  list-style: disc;
+}
+.markdown ol {
+  list-style: decimal;
+}
+.markdown li {
+  margin: 4px 0;
+}
+.markdown li::marker {
+  color: var(--fg-muted);
+}
+/* GFM task lists */
+.markdown li:has(> input[type="checkbox"]) {
+  list-style: none;
+  margin-left: -22px;
+}
+.markdown input[type="checkbox"] {
+  margin-right: 8px;
+  vertical-align: -1px;
+  accent-color: var(--coral);
+}
+.markdown strong {
+  font-weight: 600;
+}
+.markdown a {
+  color: var(--fg);
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: text-decoration-color var(--dur-hover) var(--ease-state);
+}
+.markdown a:hover {
+  text-decoration-color: var(--link);
+}
+.markdown blockquote {
+  padding: 2px 0 2px 16px;
+  border-left: 3px solid var(--coral);
+  color: var(--fg-muted);
+}
+.markdown hr {
+  border: 0;
+  height: 1px;
+  background: var(--border);
+  margin: 20px 0;
+}
+.markdown :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--code-bg);
+}
+.markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.markdown th {
+  text-align: left;
+  font-weight: 600;
+  padding: 6px 14px;
+  color: var(--fg-muted);
+}
+.markdown td {
+  padding: 8px 14px;
+  background: var(--surface-1);
+}
+.markdown td:first-child {
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+}
+.markdown td:last-child {
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 22px;
+  background: transparent !important;
+}
+.code-block code {
+  font-family: inherit;
+}
+.code-block .shiki {
+  background: transparent !important;
+}
+
+/* -------------------------------------------------------------- palette */
+
+.palette-group [cmdk-group-heading] {
+  padding: 10px 10px 4px;
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+  color: var(--fg-subtle);
+}
+
+/* --------------------------------------------------------------- toasts */
+
+.zap-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: var(--r-full);
+  background: var(--surface-popover);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-pop);
+  backdrop-filter: blur(var(--glass-blur));
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  max-width: min(560px, 90vw);
+}

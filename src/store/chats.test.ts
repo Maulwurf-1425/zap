@@ -19,6 +19,7 @@ const makeChat = (id: string, extra: Partial<Chat> = {}): Chat => ({
   updated_at: 1,
   pinned: false,
   system_prompt: null,
+  group_id: null,
   ...extra,
 });
 
@@ -37,6 +38,13 @@ vi.mock("../lib/ipc", async (importOriginal) => {
       deleteMessagesAfter: vi.fn(() => Promise.resolve(0)),
       pinChat: vi.fn(() => Promise.resolve()),
       listChats: vi.fn(() => Promise.resolve([])),
+      listGroups: vi.fn(() => Promise.resolve([])),
+      createGroup: vi.fn((name: string) =>
+        Promise.resolve({ id: "g1", name, position: 0, collapsed: false, color: null }),
+      ),
+      setChatGroup: vi.fn(() => Promise.resolve()),
+      setGroupCollapsed: vi.fn(() => Promise.resolve()),
+      deleteGroup: vi.fn(() => Promise.resolve()),
       modelCapabilities: vi.fn((model: string) =>
         Promise.resolve({ vision: model.includes("vision"), tools: model.includes("tools") }),
       ),
@@ -68,6 +76,7 @@ beforeEach(async () => {
   chatSeq = 0;
   useChats.setState({
     chats: [],
+    groups: [],
     activeId: null,
     messages: {},
     generating: {},
@@ -187,6 +196,26 @@ describe("chat store", () => {
     await useChats.getState().pin("old", true);
     expect(useChats.getState().chats.map((c) => c.id)).toEqual(["old", "new"]);
     expect(api.pinChat).toHaveBeenCalledWith("old", true);
+  });
+
+  it("groups chats and ungroups or deletes them with the group", async () => {
+    useChats.setState({ chats: [makeChat("a"), makeChat("b")], activeId: "b" });
+    const group = await useChats.getState().createGroup("  Work ", "a");
+    expect(group?.name).toBe("Work");
+    expect(api.setChatGroup).toHaveBeenCalledWith("a", "g1");
+    expect(useChats.getState().chats.find((c) => c.id === "a")?.group_id).toBe("g1");
+
+    // Moving into a collapsed group expands it.
+    useChats.getState().toggleGroup("g1");
+    expect(useChats.getState().groups[0]?.collapsed).toBe(true);
+    await useChats.getState().moveToGroup("b", "g1");
+    expect(useChats.getState().groups[0]?.collapsed).toBe(false);
+
+    await useChats.getState().deleteGroup("g1", true);
+    expect(api.deleteGroup).toHaveBeenCalledWith("g1", true);
+    expect(useChats.getState().chats).toEqual([]);
+    expect(useChats.getState().activeId).toBeNull();
+    expect(useChats.getState().groups).toEqual([]);
   });
 
   it("stores drafts per chat and clears them on send", async () => {

@@ -683,9 +683,23 @@
 /* -------------------------------------------------------------- markdown */
 
 .markdown {
+  font-family: var(--chat-font);
   font-size: var(--chat-font-size);
   line-height: var(--chat-line-height);
+  letter-spacing: var(--chat-letter-spacing);
   overflow-wrap: anywhere;
+}
+/* Plain chat text (user bubbles, composer) with the same typography. */
+.chat-text {
+  font-family: var(--chat-font);
+  font-size: var(--chat-font-size);
+  line-height: var(--chat-line-height);
+  letter-spacing: var(--chat-letter-spacing);
+}
+/* Code keeps its monospace grid regardless of the chat letter spacing. */
+.markdown code,
+.markdown pre {
+  letter-spacing: normal;
 }
 .markdown > :first-child {
   margin-top: 0;
@@ -699,7 +713,7 @@
 .markdown blockquote,
 .markdown table,
 .markdown .code-block {
-  margin: 0 0 14px;
+  margin: 0 0 var(--chat-paragraph-gap);
 }
 .markdown h1,
 .markdown h2,

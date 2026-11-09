@@ -12,8 +12,15 @@ import {
   MessageSquare,
   Monitor,
   Moon,
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
   Package,
   Palette,
+  Plus,
+  RotateCcw,
+  Send,
+  Sparkles,
   SlidersHorizontal,
   Sun,
   Trash2,
@@ -25,8 +32,9 @@ import { IconButton } from "./ui/IconButton";
 import { Skeleton } from "./ui/Skeleton";
 import { PullRow } from "./PullRow";
 import { Markdown } from "./Markdown";
-import { useSettings } from "../store/settings";
-import { useUpdates } from "../store/updates";
+import { BLUEPRINT_ICONS, FALLBACK_ICON, MAX_BLUEPRINTS, defaultBlueprints } from "../lib/blueprints";
+import { DEFAULT_SETTINGS, TYPOGRAPHY_KEYS, useSettings } from "../store/settings";
+import { releaseLabel, useUpdates } from "../store/updates";
 import { CURATED_MODELS, curatedDescription, hasOllamaModel, MODEL_NAME, useModels } from "../store/models";
 import { useProviders } from "../store/providers";
 import { EngineCard } from "./EngineCard";
@@ -44,9 +52,23 @@ import {
   type IndexStatus,
   type SearchStatus,
   type ThemeMode,
+  type Blueprint,
+  type FontFamily,
+  type Settings,
 } from "../lib/ipc";
 import type { Language } from "../lib/i18n";
-import { FONT_MAX, FONT_MIN } from "../lib/theme";
+import {
+  FONT_MAX,
+  FONT_MIN,
+  LETTER_SPACING_MAX,
+  LETTER_SPACING_MIN,
+  LINE_HEIGHT_MAX,
+  LINE_HEIGHT_MIN,
+  PARAGRAPH_MAX,
+  PARAGRAPH_MIN,
+  resolveTheme,
+} from "../lib/theme";
+import { buildTokens, CUSTOM_PALETTE, isHexColor, PALETTES } from "../lib/palettes";
 import { formatBytes, formatTokens, openExternal } from "../lib/format";
 import { engineName, errorMessage, t } from "../lib/i18n";
 
@@ -198,26 +220,8 @@ function AppearanceTab() {
           ]}
         />
       </Section>
-      <Section title={a.fontSize}>
-        <div className="flex items-center gap-4">
-          <Slider
-            label={a.fontSize}
-            min={FONT_MIN}
-            max={FONT_MAX}
-            step={1}
-            value={settings.font_size}
-            valueText={`${settings.font_size} px`}
-            onChange={(font_size) => void update({ font_size }, false)}
-            onCommit={(font_size) => void update({ font_size })}
-          />
-          <span className="w-12 flex-none text-right text-caption text-fg-muted tabular-nums">
-            {settings.font_size} px
-          </span>
-        </div>
-        <div className="markdown rounded-md border border-border px-4 py-3">
-          <Markdown content={a.preview} />
-        </div>
-      </Section>
+      <PaletteSection />
+      <TypographySection />
       <Section title={a.density}>
         <div className="flex items-center justify-between gap-4">
           <label htmlFor="density-switch" className="text-ui font-normal">
@@ -232,6 +236,229 @@ function AppearanceTab() {
         </div>
       </Section>
     </div>
+  );
+}
+
+function Swatch({ accent, tint, scheme }: { accent: string; tint: string; scheme: "dark" | "light" }) {
+  const tokens = buildTokens(accent, tint, scheme);
+  return (
+    <span
+      className="relative flex h-12 w-full items-end gap-1 overflow-hidden rounded-md border border-border p-1.5"
+      style={{ background: tokens["--bg-gradient"] }}
+      aria-hidden="true"
+    >
+      <span className="size-3 rounded-full" style={{ background: accent }} />
+      <span className="h-1.5 w-6 self-center rounded-full opacity-60" style={{ background: tokens["--azure-300"] }} />
+    </span>
+  );
+}
+
+function PaletteSection() {
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const a = t.settings.appearance;
+  const scheme = resolveTheme(settings.theme);
+  const options = [...PALETTES, { id: CUSTOM_PALETTE, accent: settings.custom_accent, tint: settings.custom_tint }];
+
+  return (
+    <Section title={a.colors}>
+      <div role="radiogroup" aria-label={a.colors} className="grid grid-cols-3 gap-2">
+        {options.map((p) => {
+          const checked = settings.palette === p.id;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              onClick={() => void update({ palette: p.id })}
+              className={`flex flex-col gap-1.5 rounded-lg border p-1.5 text-left transition-colors ${
+                checked ? "border-[var(--coral-ring)] bg-surface-2" : "border-border bg-surface-1 hover:bg-surface-2"
+              }`}
+            >
+              <Swatch accent={p.accent} tint={p.tint} scheme={scheme} />
+              <span className="flex items-center justify-between px-1 text-caption">
+                {a.palettes[p.id] ?? p.id}
+                {checked && <Check size={14} strokeWidth={2} className="text-coral" aria-hidden="true" />}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {settings.palette === CUSTOM_PALETTE && (
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-1 p-4">
+          <div className="flex flex-wrap gap-6">
+            <ColorField
+              id="custom-accent"
+              label={a.accent}
+              value={settings.custom_accent}
+              onChange={(custom_accent, persist) => void update({ custom_accent }, persist)}
+            />
+            <ColorField
+              id="custom-tint"
+              label={a.tint}
+              value={settings.custom_tint}
+              onChange={(custom_tint, persist) => void update({ custom_tint }, persist)}
+            />
+          </div>
+          <p className="text-caption text-fg-muted">{a.customHint}</p>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/** Native color picker plus a hex field. Picker drags preview live and save on release. */
+function ColorField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string, persist: boolean) => void;
+}) {
+  // Only set while the hex field is being edited; otherwise it mirrors `value`.
+  const [draft, setDraft] = useState<string | null>(null);
+
+  return (
+    <div className="flex items-center gap-3">
+      <input
+        id={id}
+        type="color"
+        value={isHexColor(value) ? value : "#000000"}
+        onInput={(e) => onChange(e.currentTarget.value, false)}
+        onChange={(e) => onChange(e.currentTarget.value, true)}
+        className="size-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+      />
+      <div className="flex flex-col">
+        <label htmlFor={id} className="text-ui">
+          {label}
+        </label>
+        <input
+          aria-label={`${label} (hex)`}
+          value={draft ?? value}
+          spellCheck={false}
+          maxLength={7}
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            setDraft(v);
+            const full = v.startsWith("#") ? v : `#${v}`;
+            if (isHexColor(full)) onChange(full.toLowerCase(), true);
+          }}
+          onBlur={() => setDraft(null)}
+          className="w-24 bg-transparent font-mono text-caption text-fg-muted uppercase outline-none focus:text-fg"
+        />
+      </div>
+    </div>
+  );
+}
+
+function SliderRow({
+  label,
+  min,
+  max,
+  step,
+  value,
+  format,
+  onChange,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  format: (v: number) => string;
+  onChange: (v: number, persist: boolean) => void;
+}) {
+  return (
+    <div className="grid grid-cols-[9rem_1fr_4rem] items-center gap-4">
+      <span className="text-ui font-normal">{label}</span>
+      <Slider
+        label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        valueText={format(value)}
+        onChange={(v) => onChange(v, false)}
+        onCommit={(v) => onChange(v, true)}
+      />
+      <span className="text-right text-caption text-fg-muted tabular-nums">{format(value)}</span>
+    </div>
+  );
+}
+
+function TypographySection() {
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const a = t.settings.appearance;
+  const changed = TYPOGRAPHY_KEYS.some((k) => settings[k] !== DEFAULT_SETTINGS[k]);
+  const reset = () => {
+    const patch: Partial<Settings> = {};
+    for (const k of TYPOGRAPHY_KEYS) Object.assign(patch, { [k]: DEFAULT_SETTINGS[k] });
+    void update(patch);
+  };
+  const round = (v: number, digits: number) => Number(v.toFixed(digits));
+
+  return (
+    <Section title={a.typography}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Segmented<FontFamily>
+          label={a.font}
+          value={settings.font_family}
+          onChange={(font_family) => void update({ font_family })}
+          options={(["inter", "system", "serif", "mono"] as const).map((f) => ({ value: f, label: a.fonts[f] }))}
+        />
+        <button className="btn btn-ghost text-fg-muted" disabled={!changed} onClick={reset}>
+          <RotateCcw size={14} strokeWidth={1.75} aria-hidden="true" />
+          {a.reset}
+        </button>
+      </div>
+      <div className="flex flex-col gap-1">
+        <SliderRow
+          label={a.fontSize}
+          min={FONT_MIN}
+          max={FONT_MAX}
+          step={1}
+          value={settings.font_size}
+          format={(v) => `${v} px`}
+          onChange={(font_size, persist) => void update({ font_size }, persist)}
+        />
+        <SliderRow
+          label={a.lineHeight}
+          min={LINE_HEIGHT_MIN}
+          max={LINE_HEIGHT_MAX}
+          step={0.05}
+          value={settings.line_height}
+          format={(v) => `${v.toFixed(2)}×`}
+          onChange={(v, persist) => void update({ line_height: round(v, 3) }, persist)}
+        />
+        <SliderRow
+          label={a.letterSpacing}
+          min={LETTER_SPACING_MIN}
+          max={LETTER_SPACING_MAX}
+          step={0.005}
+          value={settings.letter_spacing}
+          format={(v) => `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)} %`}
+          onChange={(v, persist) => void update({ letter_spacing: round(v, 3) }, persist)}
+        />
+        <SliderRow
+          label={a.paragraphSpacing}
+          min={PARAGRAPH_MIN}
+          max={PARAGRAPH_MAX}
+          step={0.125}
+          value={settings.paragraph_spacing}
+          format={(v) => `${v.toFixed(2)} em`}
+          onChange={(v, persist) => void update({ paragraph_spacing: round(v, 3) }, persist)}
+        />
+      </div>
+      <div className="markdown rounded-md border border-border px-4 py-3">
+        <Markdown content={a.preview} />
+      </div>
+    </Section>
   );
 }
 
@@ -503,6 +730,187 @@ function ChatTab() {
           ))}
         </select>
       </Field>
+
+      <BlueprintsSection />
+    </div>
+  );
+}
+
+function BlueprintsSection() {
+  const saved = useSettings((s) => s.settings.blueprints);
+  const update = useSettings((s) => s.update);
+  const [open, setOpen] = useState<number | null>(null);
+  const b = t.settings.blueprints;
+  const list = saved ?? defaultBlueprints();
+
+  const save = (next: Blueprint[], persist = true) => void update({ blueprints: next }, persist);
+  const change = (i: number, patch: Partial<Blueprint>, persist = true) =>
+    save(
+      list.map((bp, j) => (j === i ? { ...bp, ...patch } : bp)),
+      persist,
+    );
+  const move = (i: number, dir: -1 | 1) => {
+    const next = [...list];
+    const [item] = next.splice(i, 1);
+    if (!item) return;
+    next.splice(i + dir, 0, item);
+    save(next);
+    if (open === i) setOpen(i + dir);
+  };
+
+  return (
+    <Section title={b.title}>
+      <p className="text-ui font-normal text-fg-muted">{b.hint}</p>
+      <ul className="flex flex-col gap-2">
+        {list.map((bp, i) => {
+          const Icon = BLUEPRINT_ICONS[bp.icon] ?? FALLBACK_ICON;
+          const expanded = open === i;
+          return (
+            <li key={i} className="rounded-lg border border-border bg-surface-1">
+              <div className="flex items-center gap-2 py-1.5 pr-1.5 pl-3">
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  aria-expanded={expanded}
+                  onClick={() => setOpen(expanded ? null : i)}
+                >
+                  <span className="flex size-8 flex-none items-center justify-center rounded-md bg-surface-2 text-fg-muted">
+                    <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-ui">{bp.title || b.untitled}</span>
+                  {bp.send && (
+                    <Send size={14} strokeWidth={1.75} className="flex-none text-fg-subtle" aria-label={b.send} />
+                  )}
+                  <ChevronDown
+                    size={16}
+                    strokeWidth={1.75}
+                    className={`flex-none text-fg-subtle transition-transform ${expanded ? "rotate-180" : ""}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                <IconButton label={b.moveUp} className="size-8" disabled={i === 0} onClick={() => move(i, -1)}>
+                  <ArrowUp size={16} strokeWidth={1.75} />
+                </IconButton>
+                <IconButton
+                  label={b.moveDown}
+                  className="size-8"
+                  disabled={i === list.length - 1}
+                  onClick={() => move(i, 1)}
+                >
+                  <ArrowDown size={16} strokeWidth={1.75} />
+                </IconButton>
+                <IconButton
+                  label={b.remove}
+                  className="size-8"
+                  onClick={() => {
+                    save(list.filter((_, j) => j !== i));
+                    setOpen(null);
+                  }}
+                >
+                  <Trash2 size={16} strokeWidth={1.75} />
+                </IconButton>
+              </div>
+              {expanded && <BlueprintEditor blueprint={bp} onChange={(patch, persist) => change(i, patch, persist)} />}
+            </li>
+          );
+        })}
+      </ul>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          className="btn btn-secondary"
+          disabled={list.length >= MAX_BLUEPRINTS}
+          onClick={() => {
+            save([...list, { title: "", prompt: "", icon: "sparkles", send: false }]);
+            setOpen(list.length);
+          }}
+        >
+          <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
+          {b.add}
+        </button>
+        <button
+          className="btn btn-ghost text-fg-muted"
+          disabled={saved === null}
+          onClick={() => {
+            void update({ blueprints: null });
+            setOpen(null);
+          }}
+        >
+          <RotateCcw size={14} strokeWidth={1.75} aria-hidden="true" />
+          {b.reset}
+        </button>
+        <span className="ml-auto text-caption text-fg-subtle">{b.limit(MAX_BLUEPRINTS)}</span>
+      </div>
+    </Section>
+  );
+}
+
+/** Text fields preview live and save on blur; icon and switch save at once. */
+function BlueprintEditor({
+  blueprint: bp,
+  onChange,
+}: {
+  blueprint: Blueprint;
+  onChange: (patch: Partial<Blueprint>, persist: boolean) => void;
+}) {
+  const b = t.settings.blueprints;
+  return (
+    <div className="flex flex-col gap-4 border-t border-border p-4">
+      <Field label={b.name} htmlFor="bp-title">
+        <input
+          id="bp-title"
+          className="input"
+          value={bp.title}
+          maxLength={60}
+          placeholder={b.namePlaceholder}
+          onChange={(e) => onChange({ title: e.target.value }, false)}
+          onBlur={() => onChange({}, true)}
+          autoFocus={bp.title === ""}
+        />
+      </Field>
+      <Field label={b.prompt} htmlFor="bp-prompt">
+        <textarea
+          id="bp-prompt"
+          className="input h-auto min-h-[96px] resize-y py-3 leading-[22px]"
+          value={bp.prompt}
+          placeholder={b.promptPlaceholder}
+          onChange={(e) => onChange({ prompt: e.target.value }, false)}
+          onBlur={() => onChange({}, true)}
+        />
+      </Field>
+      <div className="flex flex-col gap-2">
+        <span className="text-ui">{b.icon}</span>
+        <div role="radiogroup" aria-label={b.icon} className="flex flex-wrap gap-1">
+          {Object.entries(BLUEPRINT_ICONS).map(([name, Icon]) => {
+            const checked = bp.icon === name;
+            return (
+              <button
+                key={name}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                aria-label={name}
+                onClick={() => onChange({ icon: name }, true)}
+                className={`flex size-9 items-center justify-center rounded-md border transition-colors ${
+                  checked
+                    ? "border-[var(--coral-ring)] bg-surface-2 text-fg"
+                    : "border-transparent text-fg-muted hover:bg-surface-2 hover:text-fg"
+                }`}
+              >
+                <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <label htmlFor="bp-send" className="text-ui">
+            {b.send}
+          </label>
+          <p className="text-caption text-fg-muted">{b.sendHint}</p>
+        </div>
+        <Switch id="bp-send" label={b.send} checked={bp.send} onChange={(send) => onChange({ send }, true)} />
+      </div>
     </div>
   );
 }
@@ -1112,15 +1520,15 @@ const LICENSES: [string, string][] = [
 
 function UpdatesSection() {
   const { settings, update } = useSettings();
-  const { status, version, progress, check, install } = useUpdates();
+  const { status, available, progress, check, install, showWhatsNew } = useUpdates();
   const u = t.updates;
   const message =
     status === "none"
       ? u.upToDate
       : status === "error"
         ? u.error
-        : status === "available" && version
-          ? u.available(version)
+        : status === "available" && available
+          ? u.available(releaseLabel(available))
           : status === "downloading"
             ? u.downloading
             : null;
@@ -1157,6 +1565,14 @@ function UpdatesSection() {
               {message}
             </span>
           )}
+          {/* Notes of the available update, otherwise of this version. */}
+          <button
+            className="btn btn-ghost ml-auto text-fg-muted"
+            onClick={() => void showWhatsNew(status === "available")}
+          >
+            <Sparkles size={14} strokeWidth={1.75} aria-hidden="true" />
+            {status === "available" ? u.whatsNew : u.thisVersion}
+          </button>
         </div>
         {status === "downloading" && (
           <div

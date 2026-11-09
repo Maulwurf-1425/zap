@@ -47,9 +47,12 @@ ZAP checks `releases/latest/download/latest.json` of this repository on startup
 
 To publish a new version:
 
-1. Bump the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`.
-2. Commit, then tag and push: `git tag v0.3.1 && git push origin main --tags`.
-3. The `Release` workflow builds the installers, signs the update and publishes the release.
+1. Add a `## <version> – <optional name>` section with `### English` and `### Deutsch` notes to
+   `CHANGELOG.md`. ZAP shows these notes before and after the update.
+2. Bump the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`.
+3. Commit, then tag and push: `git tag v0.3.1 && git push origin main --tags`.
+4. The `Release` workflow checks versions and notes (`scripts/release-notes.mjs`), builds the
+   installers, signs the update and publishes the release with the changelog section.
 
 Updates are signed with a minisign key. The private key never goes into the repo; it lives in the
 `TAURI_SIGNING_PRIVATE_KEY` Actions secret (keep a backup — without it, installed copies can't be

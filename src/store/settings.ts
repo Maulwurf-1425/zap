@@ -29,7 +29,35 @@ export const DEFAULT_SETTINGS: Settings = {
   file_tools_enabled: false,
   file_permission: "ask",
   auto_update: true,
+  palette: "zap",
+  custom_accent: "#fd614b",
+  custom_tint: "#3283be",
+  font_family: "inter",
+  line_height: 1.625,
+  letter_spacing: 0,
+  paragraph_spacing: 0.875,
+  blueprints: null,
+  last_seen_version: null,
 };
+
+/** Fields the appearance tab's reset button restores. */
+export const TYPOGRAPHY_KEYS = [
+  "font_family",
+  "font_size",
+  "line_height",
+  "letter_spacing",
+  "paragraph_spacing",
+] as const;
+
+const APPEARANCE_KEYS: (keyof Settings)[] = [
+  "theme",
+  "density",
+  "language",
+  "palette",
+  "custom_accent",
+  "custom_tint",
+  ...TYPOGRAPHY_KEYS,
+];
 
 interface SettingsState {
   settings: Settings;
@@ -39,8 +67,20 @@ interface SettingsState {
   update: (patch: Partial<Settings>, persist?: boolean) => Promise<void>;
 }
 
-function apply(s: Settings) {
-  applyAppearance({ theme: s.theme, fontSize: s.font_size, density: s.density, language: s.language });
+export function applySettingsAppearance(s: Settings): void {
+  applyAppearance({
+    theme: s.theme,
+    fontSize: s.font_size,
+    density: s.density,
+    language: s.language,
+    palette: s.palette,
+    customAccent: s.custom_accent,
+    customTint: s.custom_tint,
+    fontFamily: s.font_family,
+    lineHeight: s.line_height,
+    letterSpacing: s.letter_spacing,
+    paragraphSpacing: s.paragraph_spacing,
+  });
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
@@ -54,7 +94,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
       // Switch strings before React re-renders with the loaded settings.
       setLanguage(settings.language);
       set({ settings, loaded: true });
-      apply(settings);
+      applySettingsAppearance(settings);
     } catch {
       set({ loaded: true });
     }
@@ -64,7 +104,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
     const settings = { ...get().settings, ...patch };
     if (patch.language) setLanguage(patch.language);
     set({ settings });
-    if ("theme" in patch || "font_size" in patch || "density" in patch || "language" in patch) apply(settings);
+    if (APPEARANCE_KEYS.some((k) => k in patch)) applySettingsAppearance(settings);
     if (persist) await api.setSettings(settings);
   },
 }));

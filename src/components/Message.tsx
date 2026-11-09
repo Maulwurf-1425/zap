@@ -41,10 +41,7 @@ export const MessageItem = memo(function MessageItem({
         ) : (
           <>
             {message.content.trim() !== "" && (
-              <div
-                className="selectable max-w-[80%] rounded-lg rounded-br-sm bg-surface-2 px-4 py-2.5 break-words whitespace-pre-wrap"
-                style={{ fontSize: "var(--chat-font-size)", lineHeight: "var(--chat-line-height)" }}
-              >
+              <div className="selectable chat-text max-w-[80%] rounded-lg rounded-br-sm bg-surface-2 px-4 py-2.5 break-words whitespace-pre-wrap">
                 {message.content}
               </div>
             )}
@@ -216,8 +213,7 @@ function EditBox({
         ref={ref}
         value={text}
         aria-label={t.chat.edit}
-        className="w-full resize-none bg-transparent text-fg outline-none focus-visible:outline-none"
-        style={{ fontSize: "var(--chat-font-size)", lineHeight: "var(--chat-line-height)" }}
+        className="chat-text w-full resize-none bg-transparent text-fg outline-none focus-visible:outline-none"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

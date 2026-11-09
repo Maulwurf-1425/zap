@@ -5,6 +5,7 @@ import {
   events,
   toAppError,
   type Chat,
+  type ChatGroup,
   type ChatStats,
   type ErrorCode,
   type Message,
@@ -47,6 +48,8 @@ const DRAFTS_KEY = "zap.drafts";
 interface ChatsState {
   chats: Chat[];
   chatsLoaded: boolean;
+  /** Sidebar groups in display order. */
+  groups: ChatGroup[];
   activeId: string | null;
   messages: Record<string, UiMessage[]>;
   loadingMessages: Record<string, boolean>;
@@ -68,6 +71,14 @@ interface ChatsState {
   deleteMessage: (messageId: string) => Promise<void>;
   rename: (id: string, title: string) => Promise<void>;
   pin: (id: string, pinned: boolean) => Promise<void>;
+  moveToGroup: (id: string, groupId: string | null) => Promise<void>;
+  /** Creates a group at the end; moves `chatId` into it when given. */
+  createGroup: (name: string, chatId?: string) => Promise<ChatGroup | null>;
+  renameGroup: (id: string, name: string) => Promise<void>;
+  setGroupColor: (id: string, color: string | null) => Promise<void>;
+  toggleGroup: (id: string) => void;
+  moveGroup: (id: string, delta: -1 | 1) => Promise<void>;
+  deleteGroup: (id: string, deleteChats: boolean) => Promise<void>;
   exportChat: (id: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
   removeAll: () => Promise<void>;
@@ -316,6 +327,7 @@ export const useChats = create<ChatsState>((set, get) => {
   return {
     chats: [],
     chatsLoaded: false,
+    groups: [],
     activeId: null,
     messages: {},
     loadingMessages: {},
@@ -336,7 +348,8 @@ export const useChats = create<ChatsState>((set, get) => {
 
     reload: async () => {
       try {
-        set({ chats: sortChats(await api.listChats()), chatsLoaded: true });
+        const [chats, groups] = await Promise.all([api.listChats(), api.listGroups()]);
+        set({ chats: sortChats(chats), groups, chatsLoaded: true });
       } catch {
         set({ chatsLoaded: true });
         toast(t.errors.generic);
@@ -502,6 +515,91 @@ export const useChats = create<ChatsState>((set, get) => {
     pin: async (id, pinned) => {
       set({ chats: sortChats(get().chats.map((c) => (c.id === id ? { ...c, pinned } : c))) });
       await api.pinChat(id, pinned).catch(() => toast(t.errors.generic));
+    },
+
+    moveToGroup: async (id, groupId) => {
+      set({ chats: get().chats.map((c) => (c.id === id ? { ...c, group_id: groupId } : c)) });
+      // Moving into a collapsed group opens it, so the chat doesn't vanish.
+      if (groupId) {
+        const group = get().groups.find((g) => g.id === groupId);
+        if (group?.collapsed) get().toggleGroup(groupId);
+      }
+      await api.setChatGroup(id, groupId).catch(() => toast(t.errors.generic));
+    },
+
+    createGroup: async (name, chatId) => {
+      const clean = name.trim();
+      if (!clean) return null;
+      try {
+        const group = await api.createGroup(clean);
+        set({ groups: [...get().groups, group] });
+        if (chatId) await get().moveToGroup(chatId, group.id);
+        return group;
+      } catch {
+        toast(t.errors.generic);
+        return null;
+      }
+    },
+
+    renameGroup: async (id, name) => {
+      const clean = name.trim();
+      if (!clean) return;
+      set({ groups: get().groups.map((g) => (g.id === id ? { ...g, name: clean } : g)) });
+      await api.renameGroup(id, clean).catch(() => toast(t.errors.generic));
+    },
+
+    setGroupColor: async (id, color) => {
+      set({ groups: get().groups.map((g) => (g.id === id ? { ...g, color } : g)) });
+      await api.setGroupColor(id, color).catch(() => toast(t.errors.generic));
+    },
+
+    toggleGroup: (id) => {
+      const group = get().groups.find((g) => g.id === id);
+      if (!group) return;
+      const collapsed = !group.collapsed;
+      set({ groups: get().groups.map((g) => (g.id === id ? { ...g, collapsed } : g)) });
+      void api.setGroupCollapsed(id, collapsed).catch(() => undefined);
+    },
+
+    moveGroup: async (id, delta) => {
+      const groups = [...get().groups];
+      const from = groups.findIndex((g) => g.id === id);
+      const to = from + delta;
+      const item = groups[from];
+      if (!item || to < 0 || to >= groups.length) return;
+      groups.splice(from, 1);
+      groups.splice(to, 0, item);
+      set({ groups: groups.map((g, i) => ({ ...g, position: i })) });
+      await api.reorderGroups(groups.map((g) => g.id)).catch(() => toast(t.errors.generic));
+    },
+
+    deleteGroup: async (id, deleteChats) => {
+      try {
+        await api.deleteGroup(id, deleteChats);
+      } catch {
+        toast(t.errors.generic);
+        return;
+      }
+      const inGroup = new Set(
+        get()
+          .chats.filter((c) => c.group_id === id)
+          .map((c) => c.id),
+      );
+      const drop = <T>(record: Record<string, T>) =>
+        Object.fromEntries(Object.entries(record).filter(([k]) => !inGroup.has(k)));
+      if (deleteChats) {
+        set({
+          chats: get().chats.filter((c) => !inGroup.has(c.id)),
+          messages: drop(get().messages),
+          generating: drop(get().generating),
+          errors: drop(get().errors),
+          activeId: inGroup.has(get().activeId ?? "") ? null : get().activeId,
+        });
+        for (const chatId of inGroup) get().setDraft(chatId, "");
+      } else {
+        set({ chats: get().chats.map((c) => (inGroup.has(c.id) ? { ...c, group_id: null } : c)) });
+      }
+      set({ groups: get().groups.filter((g) => g.id !== id) });
     },
 
     exportChat: async (id) => {

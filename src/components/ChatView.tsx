@@ -62,7 +62,15 @@ export const ChatView = forwardRef<ChatViewHandle>(function ChatView(_props, ref
   let body: React.ReactNode;
   if (!showChat && !running) body = <EngineNotice />;
   else if (!showChat && modelsLoaded && !hasModels) body = <NoModelNotice />;
-  else if (!showChat) body = <EmptyState onPick={(p) => composerRef.current?.setText(p)} />;
+  else if (!showChat)
+    body = (
+      <EmptyState
+        onPick={(bp) => {
+          if (bp.send && ready && !generating && bp.prompt.trim()) onSend(bp.prompt);
+          else composerRef.current?.setText(bp.prompt);
+        }}
+      />
+    );
   else if (loading && messages.length === 0)
     body = (
       <div className="min-h-0 flex-1">

@@ -29,6 +29,11 @@ jobs:
 
       - run: npm ci
 
+      # Version check + name and notes from CHANGELOG.md (fails the release if missing).
+      - id: notes
+        shell: bash
+        run: node scripts/release-notes.mjs "${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,8 +41,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: ZAP ${{ github.ref_name }}
-          releaseBody: See the commits since the last release for what changed.
+          releaseName: ${{ steps.notes.outputs.name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true

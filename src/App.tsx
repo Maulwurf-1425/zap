@@ -7,15 +7,16 @@ import { focusComposer } from "./lib/actions";
 import { ChatView, type ChatViewHandle } from "./components/ChatView";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { Onboarding } from "./components/Onboarding";
 import { CommandPalette } from "./components/CommandPalette";
 import { useChats } from "./store/chats";
 import { sameModel, useModels } from "./store/models";
 import { useProviders } from "./store/providers";
-import { useSettings } from "./store/settings";
+import { applySettingsAppearance, useSettings } from "./store/settings";
 import { isOverlayOpen, useUi } from "./store/ui";
 import { useUpdates } from "./store/updates";
-import { applyAppearance, watchSystemTheme } from "./lib/theme";
+import { watchSystemTheme } from "./lib/theme";
 
 const COLLAPSE_BELOW = 1000;
 let booted = false;
@@ -49,6 +50,10 @@ export default function App() {
       await useSettings.getState().load();
       await Promise.all([useProviders.getState().init(), useModels.getState().init(), useChats.getState().init()]);
       if (!useSettings.getState().settings.onboarding_done) useUi.getState().setOnboardingOpen(true);
+      void useUpdates
+        .getState()
+        .greetNewVersion()
+        .catch(() => undefined);
       if (useSettings.getState().settings.auto_update && !import.meta.env.DEV) {
         void useUpdates.getState().check(true);
       }
@@ -61,8 +66,7 @@ export default function App() {
       watchSystemTheme(
         () => useSettings.getState().settings.theme,
         () => {
-          const s = useSettings.getState().settings;
-          applyAppearance({ theme: s.theme, fontSize: s.font_size, density: s.density, language: s.language });
+          applySettingsAppearance(useSettings.getState().settings);
         },
       ),
     [],
@@ -133,6 +137,7 @@ export default function App() {
 
         <SettingsDialog />
         <ConfirmDialog />
+        <WhatsNewDialog />
         <Onboarding />
         <CommandPalette onToggleSidebar={toggleSidebar} />
       </Fragment>

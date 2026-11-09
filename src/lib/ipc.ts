@@ -35,6 +35,17 @@ export interface Chat {
   updated_at: number;
   pinned: boolean;
   system_prompt: string | null;
+  /** Sidebar group, `null` when ungrouped. */
+  group_id: string | null;
+}
+
+export interface ChatGroup {
+  id: string;
+  name: string;
+  position: number;
+  collapsed: boolean;
+  /** "#rrggbb", `null` for the default look. */
+  color: string | null;
 }
 
 export interface ChatStats {
@@ -213,6 +224,32 @@ export interface Settings {
   file_permission: "ask" | "full";
   /** Look for a new ZAP version on startup. */
   auto_update: boolean;
+  /** Preset id from lib/palettes.ts, or "custom". */
+  palette: string;
+  custom_accent: string;
+  custom_tint: string;
+  font_family: FontFamily;
+  /** Multiple of the chat font size. */
+  line_height: number;
+  /** em */
+  letter_spacing: number;
+  /** em */
+  paragraph_spacing: number;
+  /** New-chat cards; `null` shows the built-in suggestions. */
+  blueprints: Blueprint[] | null;
+  /** App version whose "What's new" the user has seen. */
+  last_seen_version: string | null;
+}
+
+export type FontFamily = "inter" | "system" | "serif" | "mono";
+
+export interface Blueprint {
+  title: string;
+  prompt: string;
+  /** Key from components/EmptyState BLUEPRINT_ICONS. */
+  icon: string;
+  /** Send right away instead of filling the composer. */
+  send: boolean;
 }
 
 export interface StatusEvent {
@@ -299,6 +336,14 @@ export const api = {
   renameChat: (id: string, title: string) => invoke<void>("rename_chat", { id, title }),
   pinChat: (id: string, pinned: boolean) => invoke<void>("pin_chat", { id, pinned }),
   setChatModel: (id: string, model: string) => invoke<void>("set_chat_model", { id, model }),
+  setChatGroup: (id: string, groupId: string | null) => invoke<void>("set_chat_group", { id, groupId }),
+  listGroups: () => invoke<ChatGroup[]>("list_groups"),
+  createGroup: (name: string) => invoke<ChatGroup>("create_group", { name }),
+  renameGroup: (id: string, name: string) => invoke<void>("rename_group", { id, name }),
+  setGroupColor: (id: string, color: string | null) => invoke<void>("set_group_color", { id, color }),
+  setGroupCollapsed: (id: string, collapsed: boolean) => invoke<void>("set_group_collapsed", { id, collapsed }),
+  reorderGroups: (ids: string[]) => invoke<void>("reorder_groups", { ids }),
+  deleteGroup: (id: string, deleteChats: boolean) => invoke<void>("delete_group", { id, deleteChats }),
   deleteChat: (id: string) => invoke<void>("delete_chat", { id }),
   deleteAllChats: () => invoke<void>("delete_all_chats"),
 

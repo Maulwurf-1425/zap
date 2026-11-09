@@ -116,6 +116,18 @@ const MIGRATIONS: &[&str] = &[
          count INTEGER NOT NULL DEFAULT 0,
          PRIMARY KEY (month, provider)
      );",
+    // 8: user-defined chat groups (folders in the sidebar)
+    "CREATE TABLE chat_groups (
+         id TEXT PRIMARY KEY,
+         name TEXT NOT NULL,
+         position INTEGER NOT NULL,
+         collapsed INTEGER NOT NULL DEFAULT 0,
+         created_at INTEGER NOT NULL
+     );
+     ALTER TABLE chats ADD COLUMN group_id TEXT REFERENCES chat_groups(id) ON DELETE SET NULL;
+     CREATE INDEX chats_group ON chats(group_id);",
+    // 9: optional color code per group ("#rrggbb")
+    "ALTER TABLE chat_groups ADD COLUMN color TEXT;",
 ];
 
 pub fn schema_version(conn: &Connection) -> AppResult<i64> {
@@ -174,6 +186,23 @@ pub struct Chat {
     pub pinned: bool,
     #[serde(default)]
     pub system_prompt: Option<String>,
+    /// Sidebar group; not carried over by import (groups aren't exported).
+    #[serde(default)]
+    pub group_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChatGroup {
+    pub id: String,
+    pub name: String,
+    pub position: i64,
+    pub collapsed: bool,
+    /// "#rrggbb", `None` for the default look.
+    pub color: Option<String>,
+}
+
+fn is_hex_color(value: &str) -> bool {
+    value.len() == 7 && value.starts_with('#') && value[1..].chars().all(|c| c.is_ascii_hexdigit())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,6 +259,34 @@ pub struct Settings {
     pub file_permission: String,
     /// Look for a new ZAP version on startup.
     pub auto_update: bool,
+    /// Color preset id, or "custom" for `custom_accent` / `custom_tint`.
+    pub palette: String,
+    /// "#rrggbb" accent for the custom palette.
+    pub custom_accent: String,
+    /// "#rrggbb" background tint for the custom palette.
+    pub custom_tint: String,
+    /// Chat font: "inter" | "system" | "serif" | "mono"
+    pub font_family: String,
+    /// Chat line height as a multiple of the font size.
+    pub line_height: f32,
+    /// Chat letter spacing in em.
+    pub letter_spacing: f32,
+    /// Space between chat paragraphs in em.
+    pub paragraph_spacing: f32,
+    /// Cards on the new-chat screen; `None` shows the built-in suggestions.
+    pub blueprints: Option<Vec<Blueprint>>,
+    /// App version whose "What's new" the user has seen.
+    pub last_seen_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Blueprint {
+    pub title: String,
+    pub prompt: String,
+    pub icon: String,
+    /// Send right away instead of putting the text into the composer.
+    #[serde(default)]
+    pub send: bool,
 }
 
 impl Default for Settings {
@@ -256,6 +313,15 @@ impl Default for Settings {
             file_tools_enabled: false,
             file_permission: "ask".into(),
             auto_update: true,
+            palette: "zap".into(),
+            custom_accent: "#fd614b".into(),
+            custom_tint: "#3283be".into(),
+            font_family: "inter".into(),
+            line_height: 1.625,
+            letter_spacing: 0.0,
+            paragraph_spacing: 0.875,
+            blueprints: None,
+            last_seen_version: None,
         }
     }
 }
@@ -293,7 +359,8 @@ pub fn now_ms() -> i64 {
 // Chats
 // ---------------------------------------------------------------------------
 
-const CHAT_COLUMNS: &str = "id, title, model, created_at, updated_at, pinned, system_prompt";
+const CHAT_COLUMNS: &str =
+    "id, title, model, created_at, updated_at, pinned, system_prompt, group_id";
 
 fn row_to_chat(row: &rusqlite::Row<'_>) -> rusqlite::Result<Chat> {
     Ok(Chat {
@@ -306,6 +373,7 @@ fn row_to_chat(row: &rusqlite::Row<'_>) -> rusqlite::Result<Chat> {
         updated_at: row.get(4)?,
         pinned: row.get::<_, i64>(5)? != 0,
         system_prompt: row.get(6)?,
+        group_id: row.get(7)?,
     })
 }
 
@@ -329,6 +397,7 @@ pub fn create_chat(conn: &Connection, model: Option<String>) -> AppResult<Chat> 
         updated_at: now,
         pinned: false,
         system_prompt: None,
+        group_id: None,
     };
     conn.execute(
         "INSERT INTO chats (id, title, model, created_at, updated_at, pinned) VALUES (?1, ?2, ?3, ?4, ?5, 0)",
@@ -361,6 +430,117 @@ pub fn pin_chat(conn: &Connection, id: &str, pinned: bool) -> AppResult<()> {
         params![pinned as i64, id],
     )?;
     Ok(())
+}
+
+/// Moves a chat into a group, or out of all groups with `None`.
+pub fn set_chat_group(conn: &Connection, id: &str, group_id: Option<&str>) -> AppResult<()> {
+    conn.execute(
+        "UPDATE chats SET group_id = ?1 WHERE id = ?2",
+        params![group_id, id],
+    )?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Chat groups
+// ---------------------------------------------------------------------------
+
+pub fn list_groups(conn: &Connection) -> AppResult<Vec<ChatGroup>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, position, collapsed, color FROM chat_groups ORDER BY position, created_at",
+    )?;
+    let groups = stmt
+        .query_map([], |r| {
+            Ok(ChatGroup {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                position: r.get(2)?,
+                collapsed: r.get::<_, i64>(3)? != 0,
+                color: r.get(4)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(groups)
+}
+
+/// New groups go to the end of the list.
+pub fn create_group(conn: &Connection, name: &str) -> AppResult<ChatGroup> {
+    let position: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(position), -1) + 1 FROM chat_groups",
+        [],
+        |r| r.get(0),
+    )?;
+    let group = ChatGroup {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: name.trim().to_string(),
+        position,
+        collapsed: false,
+        color: None,
+    };
+    conn.execute(
+        "INSERT INTO chat_groups (id, name, position, collapsed, created_at) VALUES (?1, ?2, ?3, 0, ?4)",
+        params![group.id, group.name, group.position, now_ms()],
+    )?;
+    Ok(group)
+}
+
+pub fn rename_group(conn: &Connection, id: &str, name: &str) -> AppResult<()> {
+    conn.execute(
+        "UPDATE chat_groups SET name = ?1 WHERE id = ?2",
+        params![name.trim(), id],
+    )?;
+    Ok(())
+}
+
+/// Sets or clears the group's color; anything but "#rrggbb" clears it.
+pub fn set_group_color(conn: &Connection, id: &str, color: Option<&str>) -> AppResult<()> {
+    let color = color
+        .filter(|c| is_hex_color(c))
+        .map(str::to_ascii_lowercase);
+    conn.execute(
+        "UPDATE chat_groups SET color = ?1 WHERE id = ?2",
+        params![color, id],
+    )?;
+    Ok(())
+}
+
+pub fn set_group_collapsed(conn: &Connection, id: &str, collapsed: bool) -> AppResult<()> {
+    conn.execute(
+        "UPDATE chat_groups SET collapsed = ?1 WHERE id = ?2",
+        params![collapsed as i64, id],
+    )?;
+    Ok(())
+}
+
+/// Stores the given order; ids not in the list keep their position.
+pub fn reorder_groups(conn: &mut Connection, ids: &[String]) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    for (i, id) in ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE chat_groups SET position = ?1 WHERE id = ?2",
+            params![i as i64, id],
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+/// Deletes a group; with `delete_chats` its chats go too, otherwise they
+/// become ungrouped (FK `ON DELETE SET NULL`). Returns the deleted chat ids.
+pub fn delete_group(conn: &mut Connection, id: &str, delete_chats: bool) -> AppResult<Vec<String>> {
+    let tx = conn.transaction()?;
+    let mut deleted = Vec::new();
+    if delete_chats {
+        let mut stmt = tx.prepare("SELECT id FROM chats WHERE group_id = ?1")?;
+        deleted = stmt
+            .query_map([id], |r| r.get(0))?
+            .collect::<Result<Vec<String>, _>>()?;
+        drop(stmt);
+        tx.execute("DELETE FROM chats WHERE group_id = ?1", [id])?;
+    }
+    tx.execute("DELETE FROM chat_groups WHERE id = ?1", [id])?;
+    tx.commit()?;
+    Ok(deleted)
 }
 
 pub fn set_chat_model(conn: &Connection, id: &str, model: &str) -> AppResult<()> {
@@ -952,6 +1132,84 @@ mod tests {
         open(Path::new(":memory:")).unwrap()
     }
 
+    #[test]
+    fn chat_groups_lifecycle() {
+        let mut conn = mem();
+        let work = create_group(&conn, "  Work ").unwrap();
+        let home = create_group(&conn, "Home").unwrap();
+        assert_eq!(work.name, "Work");
+        assert_eq!((work.position, home.position), (0, 1));
+
+        let a = create_chat(&conn, None).unwrap();
+        let b = create_chat(&conn, None).unwrap();
+        set_chat_group(&conn, &a.id, Some(&work.id)).unwrap();
+        set_chat_group(&conn, &b.id, Some(&home.id)).unwrap();
+        assert_eq!(
+            get_chat(&conn, &a.id).unwrap().unwrap().group_id,
+            Some(work.id.clone())
+        );
+
+        rename_group(&conn, &work.id, "Job").unwrap();
+        set_group_color(&conn, &home.id, Some("#3B82F6")).unwrap();
+        set_group_color(&conn, &work.id, Some("red")).unwrap();
+        let colors: Vec<_> = list_groups(&conn)
+            .unwrap()
+            .into_iter()
+            .map(|g| g.color)
+            .collect();
+        assert_eq!(colors, vec![None, Some("#3b82f6".to_string())]);
+        set_group_collapsed(&conn, &work.id, true).unwrap();
+        reorder_groups(&mut conn, &[home.id.clone(), work.id.clone()]).unwrap();
+        let groups = list_groups(&conn).unwrap();
+        assert_eq!(groups[0].id, home.id);
+        assert_eq!(
+            (groups[1].name.as_str(), groups[1].collapsed),
+            ("Job", true)
+        );
+
+        // Keeping chats ungroups them; deleting chats removes them.
+        assert!(delete_group(&mut conn, &work.id, false).unwrap().is_empty());
+        assert_eq!(get_chat(&conn, &a.id).unwrap().unwrap().group_id, None);
+        assert_eq!(
+            delete_group(&mut conn, &home.id, true).unwrap(),
+            vec![b.id.clone()]
+        );
+        assert!(get_chat(&conn, &b.id).unwrap().is_none());
+        assert!(list_groups(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn settings_keep_appearance_and_blueprints() {
+        let conn = mem();
+        // Settings saved before these fields existed load with defaults.
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('app', '{\"theme\":\"light\"}')",
+            [],
+        )
+        .unwrap();
+        let old = get_settings(&conn).unwrap();
+        assert_eq!(old.theme, "light");
+        assert_eq!(old.palette, "zap");
+        assert!(old.blueprints.is_none());
+
+        let mut s = old;
+        s.palette = "custom".into();
+        s.custom_accent = "#00ff88".into();
+        s.line_height = 1.9;
+        s.blueprints = Some(vec![Blueprint {
+            title: "Summarize".into(),
+            prompt: "Summarize:\n\n".into(),
+            icon: "list".into(),
+            send: true,
+        }]);
+        set_settings(&conn, &s).unwrap();
+        let back = get_settings(&conn).unwrap();
+        assert_eq!(back.palette, "custom");
+        assert_eq!(back.custom_accent, "#00ff88");
+        assert!((back.line_height - 1.9).abs() < f32::EPSILON);
+        assert_eq!(back.blueprints, s.blueprints);
+    }
+
     fn msg(id: &str, chat_id: &str, role: &str, content: &str, at: i64) -> Message {
         Message {
             id: id.into(),
@@ -1194,6 +1452,7 @@ mod tests {
             updated_at: 0,
             pinned: false,
             system_prompt: None,
+            group_id: None,
         };
         let messages = [msg("m", "c", "user", "Hi", 1)];
         let en = chat_to_markdown(&chat, &messages, "en");

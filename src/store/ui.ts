@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useUpdates } from "./updates";
 
 export type SettingsTab = "general" | "appearance" | "models" | "chat" | "usage" | "web" | "files" | "data" | "about";
 
@@ -58,5 +59,7 @@ export const useUi = create<UiState>((set) => ({
 /** True while any dialog owns the keyboard (global shortcuts back off). */
 export function isOverlayOpen(): boolean {
   const s = useUi.getState();
-  return s.settingsOpen || s.paletteOpen || s.onboardingOpen || s.confirm !== null;
+  return (
+    s.settingsOpen || s.paletteOpen || s.onboardingOpen || s.confirm !== null || useUpdates.getState().whatsNew !== null
+  );
 }

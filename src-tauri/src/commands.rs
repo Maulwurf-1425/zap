@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tokio_util::sync::CancellationToken;
 
-use crate::db::{self, Chat, ExportFile, Message, SearchHit, Settings};
+use crate::db::{self, Chat, ChatGroup, ExportFile, Message, SearchHit, Settings};
 use crate::engine;
 use crate::error::{AppError, AppResult};
 use crate::ollama::{self, ModelDetails, PullProgress};
@@ -591,6 +591,67 @@ pub fn delete_chat(state: State<'_, AppState>, id: String) -> AppResult<()> {
         token.cancel();
     }
     db::delete_chat(&state.db(), &id)
+}
+
+#[tauri::command]
+pub fn set_chat_group(
+    state: State<'_, AppState>,
+    id: String,
+    group_id: Option<String>,
+) -> AppResult<()> {
+    db::set_chat_group(&state.db(), &id, group_id.as_deref())
+}
+
+// --- Chat groups ---------------------------------------------------------------
+
+#[tauri::command]
+pub fn list_groups(state: State<'_, AppState>) -> AppResult<Vec<ChatGroup>> {
+    db::list_groups(&state.db())
+}
+
+#[tauri::command]
+pub fn create_group(state: State<'_, AppState>, name: String) -> AppResult<ChatGroup> {
+    db::create_group(&state.db(), &name)
+}
+
+#[tauri::command]
+pub fn rename_group(state: State<'_, AppState>, id: String, name: String) -> AppResult<()> {
+    db::rename_group(&state.db(), &id, &name)
+}
+
+#[tauri::command]
+pub fn set_group_color(
+    state: State<'_, AppState>,
+    id: String,
+    color: Option<String>,
+) -> AppResult<()> {
+    db::set_group_color(&state.db(), &id, color.as_deref())
+}
+
+#[tauri::command]
+pub fn set_group_collapsed(
+    state: State<'_, AppState>,
+    id: String,
+    collapsed: bool,
+) -> AppResult<()> {
+    db::set_group_collapsed(&state.db(), &id, collapsed)
+}
+
+#[tauri::command]
+pub fn reorder_groups(state: State<'_, AppState>, ids: Vec<String>) -> AppResult<()> {
+    db::reorder_groups(&mut state.db(), &ids)
+}
+
+#[tauri::command]
+pub fn delete_group(state: State<'_, AppState>, id: String, delete_chats: bool) -> AppResult<()> {
+    let deleted = db::delete_group(&mut state.db(), &id, delete_chats)?;
+    let mut tokens = lock(&state.chat_tokens);
+    for chat_id in deleted {
+        if let Some((_, token)) = tokens.remove(&chat_id) {
+            token.cancel();
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

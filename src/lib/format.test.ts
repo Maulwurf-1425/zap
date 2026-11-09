@@ -28,6 +28,7 @@ describe("date grouping", () => {
       updated_at,
       pinned,
       system_prompt: null,
+      group_id: null,
     });
     const groups = groupChats([chat("a", at(0)), chat("b", at(30), true), chat("c", at(1))], NOW);
     expect(groups.pinned.map((c) => c.id)).toEqual(["b"]);

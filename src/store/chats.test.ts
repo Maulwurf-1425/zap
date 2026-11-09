@@ -39,6 +39,7 @@ vi.mock("../lib/ipc", async (importOriginal) => {
       pinChat: vi.fn(() => Promise.resolve()),
       listChats: vi.fn(() => Promise.resolve([])),
       listGroups: vi.fn(() => Promise.resolve([])),
+      readLink: vi.fn(() => Promise.resolve({ page: null, error: "fetch_failed" })),
       createGroup: vi.fn((name: string) =>
         Promise.resolve({ id: "g1", name, position: 0, collapsed: false, color: null }),
       ),
@@ -65,7 +66,7 @@ vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => setTimeout(
 vi.stubGlobal("cancelAnimationFrame", (id: number) => clearTimeout(id));
 
 const { api } = await import("../lib/ipc");
-const { useChats } = await import("./chats");
+const { useChats, parseTools, dateContext } = await import("./chats");
 const { useModels } = await import("./models");
 const { useSettings, DEFAULT_SETTINGS } = await import("./settings");
 
@@ -97,11 +98,12 @@ describe("chat store", () => {
     const chatId = useChats.getState().activeId!;
     expect(chatId).toBe("c1");
 
-    // System prompt + user message, temperature and context length.
+    // Date, system prompt + user message, temperature and context length.
     expect(api.chatStream).toHaveBeenCalledWith(
       "c1",
       "llama3.2:3b",
       [
+        { role: "system", content: expect.stringContaining("Current date and time:") as string },
         { role: "system", content: "Sei kurz." },
         { role: "user", content: "Hallo" },
       ],
@@ -260,6 +262,43 @@ describe("chat store", () => {
     const firstUser = payload2.find((m) => m.role === "user")!;
     expect(firstUser.images).toBeUndefined();
     expect(firstUser.content).toContain("[Image: cat.jpg]");
+  });
+
+  it("reads linked pages once and gives their text to any model", async () => {
+    vi.mocked(api.readLink).mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes("ok")
+          ? { page: { title: "Ok page", url, text: "Page body" }, error: null }
+          : { page: null, error: "blocked_url" },
+      ),
+    );
+    await useChats.getState().send("Summarize https://ok.example/a and http://localhost/x");
+    expect(api.readLink).toHaveBeenCalledTimes(2);
+
+    // The page text reaches the model even though it can't call tools.
+    const [, , payload] = vi.mocked(api.chatStream).mock.calls[0]!;
+    expect(payload.find((m) => m.role === "user")!.content).toContain("Page body");
+
+    // One card per link on the reply: read and blocked.
+    const reply = useChats.getState().messages.c1!.at(-1)!;
+    expect(parseTools(reply.tools).map((a) => [a.status, a.error])).toEqual([
+      ["done", undefined],
+      ["error", "blocked_url"],
+    ]);
+
+    // Regenerating doesn't fetch the page again.
+    handlers.token!({ chat_id: "c1", content: "Summary." });
+    handlers.done!({ chat_id: "c1", stats: null, stopped: false });
+    await tick();
+    await useChats.getState().regenerate(useChats.getState().messages.c1!.at(-1)!.id);
+    expect(api.readLink).toHaveBeenCalledTimes(3); // only the blocked link is retried
+  });
+
+  it("tells the model the local date and time", () => {
+    const text = dateContext(new Date(2026, 10, 9, 12, 45));
+    expect(text).toMatch(
+      /^Current date and time: Monday,? 9 November 2026, 12:45 \(the user's local time, UTC[+-]\d\d:\d\d\)\.$/,
+    );
   });
 
   it("sends a message with only attachments", async () => {

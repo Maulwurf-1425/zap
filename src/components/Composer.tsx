@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Bolt } from "./Brand";
 import { ModelPicker } from "./ModelPicker";
 import { AttachMenu, AttachmentChip } from "./Attachments";
+import { DictationButton, VoiceBar } from "./Voice";
 import { NEW_CHAT_DRAFT, useChats } from "../store/chats";
 import { useModels } from "../store/models";
 import { useSettings } from "../store/settings";
@@ -181,6 +182,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     onSend(text);
   };
 
+  /** Appends dictated text to the draft and puts the cursor at the end. */
+  const insertDictation = (spoken: string) => {
+    const current = useChats.getState().drafts[draftKey] ?? "";
+    const value = current.trim() ? `${current.trimEnd()} ${spoken}` : spoken;
+    setDraft(draftKey, value);
+    requestAnimationFrame(() => {
+      const el = areaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(value.length, value.length);
+    });
+  };
+
   return (
     <div className="composer glass relative flex flex-col gap-1 rounded-xl px-4 pt-3 pb-2.5">
       {mention && (
@@ -246,6 +260,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           )}
         </div>
       )}
+      <VoiceBar onText={insertDictation} />
       <label htmlFor="composer-input" className="sr-only">
         {t.composer.label}
       </label>
@@ -327,6 +342,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           >
             <FolderSearch size={16} strokeWidth={1.75} />
           </IconButton>
+          <DictationButton disabled={disabled} onText={insertDictation} />
           <ModelPicker />
         </div>
         {generating ? (

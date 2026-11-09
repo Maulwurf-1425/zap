@@ -10,6 +10,7 @@ import {
   Globe,
   Info,
   MessageSquare,
+  Mic,
   Monitor,
   Moon,
   ArrowDown,
@@ -35,6 +36,8 @@ import { Markdown } from "./Markdown";
 import { BLUEPRINT_ICONS, FALLBACK_ICON, MAX_BLUEPRINTS, defaultBlueprints } from "../lib/blueprints";
 import { DEFAULT_SETTINGS, TYPOGRAPHY_KEYS, useSettings } from "../store/settings";
 import { releaseLabel, useUpdates } from "../store/updates";
+import { VoiceTab } from "./VoiceSettings";
+import { useDiscord } from "../store/discord";
 import { CURATED_MODELS, curatedDescription, hasOllamaModel, MODEL_NAME, useModels } from "../store/models";
 import { useProviders } from "../store/providers";
 import { EngineCard } from "./EngineCard";
@@ -78,6 +81,7 @@ const tabs = (): { id: SettingsTab; label: string; icon: typeof Palette }[] => [
   { id: "appearance", label: t.settings.tabs.appearance, icon: Palette },
   { id: "models", label: t.settings.tabs.models, icon: Package },
   { id: "chat", label: t.settings.tabs.chat, icon: MessageSquare },
+  { id: "voice", label: t.voice.tab, icon: Mic },
   { id: "usage", label: t.settings.tabs.usage, icon: ChartColumn },
   { id: "web", label: t.settings.tabs.web, icon: Globe },
   { id: "files", label: t.settings.tabs.files, icon: FolderSearch },
@@ -124,6 +128,9 @@ export function SettingsDialog() {
           <Tabs.Content value="chat" className="outline-none">
             <ChatTab />
           </Tabs.Content>
+          <Tabs.Content value="voice" className="outline-none">
+            <VoiceTab />
+          </Tabs.Content>
           <Tabs.Content value="usage" className="outline-none">
             <UsageTab />
           </Tabs.Content>
@@ -166,6 +173,7 @@ function GeneralTab() {
           ]}
         />
       </Section>
+      <DiscordSection />
       <Section title={t.settings.general.onboarding}>
         <div className="flex items-center justify-between gap-4">
           <p className="text-ui font-normal text-fg-muted">{t.settings.general.onboardingHint}</p>
@@ -197,6 +205,59 @@ function GeneralTab() {
         </dl>
       </Section>
     </div>
+  );
+}
+
+/** "Playing ZAP" in Discord; hidden in builds without a Discord app id. */
+function DiscordSection() {
+  const available = useDiscord((s) => s.available);
+  const connected = useDiscord((s) => s.connected);
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const d = t.discord.settings;
+  if (!available) return null;
+  return (
+    <Section title={d.title}>
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-1 p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <label htmlFor="discord-presence" className="text-ui">
+              {d.show}
+            </label>
+            <p className="text-caption text-fg-muted">{d.showHint}</p>
+          </div>
+          <Switch
+            id="discord-presence"
+            label={d.show}
+            checked={settings.discord_presence}
+            onChange={(on) => void update({ discord_presence: on })}
+          />
+        </div>
+        {settings.discord_presence && (
+          <>
+            <div className="flex items-center justify-between gap-4 border-t border-border pt-3">
+              <label htmlFor="discord-model" className="text-ui font-normal">
+                {d.model}
+              </label>
+              <Switch
+                id="discord-model"
+                label={d.model}
+                checked={settings.discord_show_model}
+                onChange={(on) => void update({ discord_show_model: on })}
+              />
+            </div>
+            <p className="flex items-center gap-2 text-caption text-fg-muted" role="status">
+              <span
+                className="status-dot"
+                style={{ background: connected ? "var(--success)" : "var(--warning)" }}
+                aria-hidden="true"
+              />
+              {connected ? d.connected : d.waiting}
+            </p>
+          </>
+        )}
+      </div>
+    </Section>
   );
 }
 
@@ -1110,6 +1171,20 @@ function WebTab() {
             label={w.enable}
             checked={settings.web_search_enabled}
             onChange={(on) => void update({ web_search_enabled: on })}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface-1 p-4">
+          <div>
+            <label htmlFor="read-links" className="text-ui">
+              {w.readLinks}
+            </label>
+            <p className="text-caption text-fg-muted">{w.readLinksHint}</p>
+          </div>
+          <Switch
+            id="read-links"
+            label={w.readLinks}
+            checked={settings.read_links}
+            onChange={(on) => void update({ read_links: on })}
           />
         </div>
       </Section>

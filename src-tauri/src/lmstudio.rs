@@ -66,13 +66,34 @@ fn find_lms() -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+/// Per-user install (default) or a machine-wide one under Program Files.
+fn app_exe() -> Option<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        roots.push(PathBuf::from(local).join("Programs"));
+    }
+    if let Some(program_files) = std::env::var_os("ProgramFiles") {
+        roots.push(PathBuf::from(program_files));
+    }
+    roots
+        .iter()
+        .flat_map(|root| ["LM Studio", "lm-studio"].map(|dir| root.join(dir).join("LM Studio.exe")))
+        .find(|p| p.is_file())
+}
+
 fn app_installed() -> bool {
-    std::env::var_os("LOCALAPPDATA").is_some_and(|local| {
-        let programs = PathBuf::from(local).join("Programs");
-        ["LM Studio", "lm-studio"]
-            .iter()
-            .any(|dir| programs.join(dir).join("LM Studio.exe").is_file())
-    })
+    app_exe().is_some()
+}
+
+/// Whether the `lms` CLI exists (LM Studio sets it up on its first launch).
+pub fn cli_ready() -> bool {
+    find_lms().is_some()
+}
+
+/// Opens the LM Studio app (after a fresh install it sets up `lms` and lets
+/// the user download a first model).
+pub fn launch_app() -> bool {
+    app_exe().is_some_and(|exe| Command::new(exe).spawn().is_ok())
 }
 
 pub fn installed() -> bool {

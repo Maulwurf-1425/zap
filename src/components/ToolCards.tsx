@@ -94,8 +94,14 @@ function note(a: ToolActivity): string | null {
   if (a.status === "denied") return t.files.denied;
   if (a.status === "pending") return t.files.waiting;
   if (a.status === "error") return errorText(a.error);
-  if (a.name === "web_search" && a.sources.length > 0) return t.web.sources(a.sources.length);
   const [kind, value] = (a.detail ?? "").split(":");
+  if (a.name === "web_search") {
+    if (kind === "starting") return value === "docker" ? t.web.startingDocker : t.web.startingSearxng;
+    const parts = a.sources.length > 0 ? [t.web.sources(a.sources.length)] : [];
+    // Another service failed; the built-in search stepped in.
+    if (kind === "fallback") parts.push(value === "brave" ? t.web.fallbackBrave : t.web.fallbackSearxng);
+    return parts.length > 0 ? parts.join(" · ") : null;
+  }
   const n = Number(value);
   if (kind === "results") return t.files.results(n);
   if (kind === "entries") return t.files.entries(n);
@@ -112,7 +118,13 @@ export function ToolCards({ activities }: { activities: ToolActivity[] }) {
   return (
     <div className="mb-3 flex flex-col gap-1.5" aria-live="polite">
       {activities.map((a) =>
-        a.status === "pending" ? <ApprovalCard key={a.id} activity={a} /> : <ToolCard key={a.id} activity={a} />,
+        a.status !== "pending" ? (
+          <ToolCard key={a.id} activity={a} />
+        ) : a.detail?.startsWith("searxng_down:") ? (
+          <SearxngDownCard key={a.id} activity={a} />
+        ) : (
+          <ApprovalCard key={a.id} activity={a} />
+        ),
       )}
     </div>
   );
@@ -211,6 +223,51 @@ function DiffView({ text }: { text: string }) {
         );
       })}
     </pre>
+  );
+}
+
+/** SearXNG didn't answer during a search: start Docker, or use the built-in
+ *  search for the rest of this session. */
+function SearxngDownCard({ activity: a }: { activity: ToolActivity }) {
+  const [busy, setBusy] = useState(false);
+  const w = t.web;
+  // "searxng_down:stopped" (Docker Desktop off) | "searxng_down:running" (container off)
+  const dockerRunning = a.detail === "searxng_down:running";
+
+  const answer = async (decision: ApprovalDecision) => {
+    setBusy(true);
+    try {
+      await api.answerApproval(a.id, decision);
+    } catch {
+      setBusy(false);
+      toast(t.errors.generic);
+    }
+  };
+
+  return (
+    <div
+      className="w-full max-w-full rounded-lg border border-[var(--coral-ring)] bg-surface-2 text-ui shadow-card"
+      role="alertdialog"
+      aria-label={w.searxngDown}
+    >
+      <div className="flex items-start gap-3 px-4 pt-3">
+        <TriangleAlert size={18} strokeWidth={1.75} className="mt-0.5 flex-none text-coral" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <div>{w.searxngDown}</div>
+          <p className="text-caption text-fg-muted">{dockerRunning ? w.searxngContainerOff : w.searxngDockerOff}</p>
+          <p className="mt-1 text-caption text-fg-subtle">{w.searxngQuestion(a.input)}</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+        <button className="btn btn-secondary" disabled={busy} onClick={() => void answer("allow")} autoFocus>
+          {dockerRunning ? w.startSearxng : w.startDocker}
+        </button>
+        <button className="btn btn-ghost" disabled={busy} onClick={() => void answer("deny")}>
+          {w.useBuiltin}
+        </button>
+      </div>
+      {!dockerRunning && <p className="px-4 pb-3 text-caption text-fg-subtle">{w.dockerAutostartTip}</p>}
+    </div>
   );
 }
 

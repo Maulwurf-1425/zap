@@ -38,6 +38,16 @@ export const DEFAULT_SETTINGS: Settings = {
   paragraph_spacing: 0.875,
   blueprints: null,
   last_seen_version: null,
+  read_links: true,
+  voice_model: "base",
+  voice_language: "auto",
+  mic_device: null,
+  voice_de: "de_DE-thorsten-medium",
+  voice_en: "en_US-amy-medium",
+  speech_rate: 1,
+  auto_read: false,
+  discord_presence: false,
+  discord_show_model: true,
 };
 
 /** Fields the appearance tab's reset button restores. */

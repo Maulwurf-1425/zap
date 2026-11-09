@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -9,6 +10,7 @@ use tauri_plugin_dialog::DialogExt;
 use tokio_util::sync::CancellationToken;
 
 use crate::db::{self, Chat, ChatGroup, ExportFile, Message, SearchHit, Settings};
+use crate::docker::{docker, SEARXNG_CONTAINER};
 use crate::engine;
 use crate::error::{AppError, AppResult};
 use crate::ollama::{self, ModelDetails, PullProgress};
@@ -19,7 +21,7 @@ use crate::provider::{
 use crate::state::{lock, AppState, Decision};
 use crate::tools;
 use crate::web;
-use crate::{file_tools, files};
+use crate::{file_tools, files, installer, lmstudio};
 
 const SEARCH_LIMIT: usize = 50;
 const TITLE_INPUT_CHARS: usize = 1200;
@@ -55,6 +57,69 @@ pub fn provider_status(state: State<'_, AppState>) -> Statuses {
 #[tauri::command]
 pub async fn provider_start(app: AppHandle, provider: ProviderKind) -> AppResult<ProviderStatus> {
     Ok(engine::ensure(&app, provider).await)
+}
+
+#[derive(Serialize)]
+pub struct LinkResult {
+    page: Option<web::Page>,
+    /// Error code for the UI (same codes as the fetch_page tool).
+    error: Option<&'static str>,
+}
+
+/// Reads a web page the user pasted into a message, so every model can use
+/// it (not only tool-capable ones). Same safety rules as the fetch_page tool.
+#[tauri::command]
+pub async fn read_link(state: State<'_, AppState>, url: String) -> AppResult<LinkResult> {
+    Ok(match web::fetch_page(&state.web, &url).await {
+        Ok(page) => LinkResult {
+            page: Some(page),
+            error: None,
+        },
+        Err(err) => LinkResult {
+            page: None,
+            error: Some(match tools::error_code(&err) {
+                "failed" | "unreachable" => "fetch_failed",
+                code => code,
+            }),
+        },
+    })
+}
+
+/// Whether ZAP can install engines itself (winget is available).
+#[tauri::command]
+pub async fn engine_install_supported() -> bool {
+    installer::available().await
+}
+
+/// Installs an engine via winget, then starts it. LM Studio is opened once
+/// after installing so it can set up its `lms` CLI.
+#[tauri::command]
+pub async fn install_engine(app: AppHandle, provider: ProviderKind) -> AppResult<ProviderStatus> {
+    static BUSY: Mutex<Vec<ProviderKind>> = Mutex::new(Vec::new());
+    {
+        let mut busy = lock(&BUSY);
+        if busy.contains(&provider) {
+            return Err(AppError::Other("install already running".into()));
+        }
+        busy.push(provider);
+    }
+    let ok = installer::install(&app, provider).await;
+    lock(&BUSY).retain(|k| *k != provider);
+    if !ok {
+        return Err(AppError::Other("install_failed".into()));
+    }
+    if provider == ProviderKind::Lmstudio && lmstudio::launch_app() {
+        // First launch writes ~/.lmstudio/bin/lms.exe; give it up to a minute.
+        for _ in 0..60 {
+            if lmstudio::cli_ready() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+    }
+    let status = engine::ensure(&app, provider).await;
+    installer::emit(&app, provider, installer::Phase::Done, None, None);
+    Ok(status)
 }
 
 /// Models of all enabled, running providers.
@@ -257,7 +322,24 @@ pub async fn generate_title(
     db::apply_generated_title(&state.db(), &chat_id, &title)
 }
 
-/// Upper bound for model turns in one reply (each turn may call tools).
+/// Joins all system messages into one at the start. Several chat templates
+/// (Qwen among them) reject a second system message or one after the first.
+pub fn merge_system(messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
+    let (system, rest): (Vec<_>, Vec<_>) = messages.into_iter().partition(|m| m.role == "system");
+    let text = system
+        .iter()
+        .map(|m| m.content.trim())
+        .filter(|c| !c.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let mut out = Vec::with_capacity(rest.len() + 1);
+    if !text.is_empty() {
+        out.push(ChatMessage::text("system", text));
+    }
+    out.extend(rest);
+    out
+}
+
 /// Upper bound for model turns in one reply (each turn may call tools).
 /// File tasks need a few steps (search, read, edit), so this is generous.
 const MAX_TOOL_ROUNDS: usize = 12;
@@ -291,6 +373,7 @@ async fn run_agent(
     if !prompts.is_empty() {
         messages.insert(0, ChatMessage::text("system", prompts.join("\n\n")));
     }
+    let mut messages = merge_system(messages);
     let ctx = tools::ToolCtx {
         app,
         chat_id,
@@ -298,6 +381,9 @@ async fn run_agent(
     };
 
     let mut total: Option<ChatStats> = None;
+    // Calls already made in this reply (name + arguments): small models
+    // sometimes repeat the same search or page read in a loop.
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     for round in 0..MAX_TOOL_ROUNDS {
         let offer: &[ToolSpec] = if round + 1 < MAX_TOOL_ROUNDS {
             &specs
@@ -341,6 +427,19 @@ async fn run_agent(
             ..Default::default()
         });
         for call in &turn.tool_calls {
+            if !seen.insert(format!("{}\u{0}{}", call.name, call.arguments)) {
+                messages.push(ChatMessage {
+                    role: "tool".into(),
+                    content:
+                        "You already made exactly this call in this reply; its result is above. \
+Don't repeat it: use that result, or answer now."
+                            .into(),
+                    tool_call_id: Some(call.id.clone()),
+                    tool_name: Some(call.name.clone()),
+                    ..Default::default()
+                });
+                continue;
+            }
             let started = tools::ToolActivity::started(call);
             ctx.emit(&started);
             let (activity, output) = tokio::select! {
@@ -459,26 +558,21 @@ pub fn set_brave_key(key: Option<String>) -> AppResult<()> {
 /// `message` (see `tools::error_code`).
 #[tauri::command]
 pub async fn test_search(state: State<'_, AppState>) -> AppResult<usize> {
+    let provider = tools::search_config(&state).0.provider;
     tools::search(&state, "ZAP local AI chat", 3)
         .await
         .map(|r| r.len())
-        .map_err(|e| AppError::Other(tools::error_code(&e).into()))
+        .map_err(|e| {
+            let code = match (provider, tools::error_code(&e)) {
+                (web::SearchProvider::Searxng, "unreachable") => "searxng_unreachable",
+                (_, code) => code,
+            };
+            AppError::Other(code.into())
+        })
 }
 
 const SEARXNG_PORT: u16 = 8888;
-const SEARXNG_CONTAINER: &str = "zap-searxng";
 const SEARXNG_IMAGE: &str = "docker.io/searxng/searxng:latest";
-
-fn docker(args: &[&str]) -> std::io::Result<std::process::Output> {
-    let mut cmd = std::process::Command::new("docker");
-    cmd.args(args);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(ollama::CREATE_NO_WINDOW);
-    }
-    cmd.output()
-}
 
 /// Sets up SearXNG as a local Docker container (loopback only, JSON
 /// enabled), waits until it answers and switches the search provider to it.
@@ -878,6 +972,22 @@ pub fn set_settings(state: State<'_, AppState>, settings: Settings) -> AppResult
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_messages_become_one_at_the_start() {
+        let msgs = vec![
+            ChatMessage::text("system", "Tools rules"),
+            ChatMessage::text("system", "Date"),
+            ChatMessage::text("user", "Hi"),
+            ChatMessage::text("system", "  "),
+        ];
+        let merged = merge_system(msgs);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].role, "system");
+        assert_eq!(merged[0].content, "Tools rules\n\nDate");
+        assert_eq!(merged[1].content, "Hi");
+        assert_eq!(merge_system(vec![ChatMessage::text("user", "x")]).len(), 1);
+    }
 
     #[test]
     fn file_names_are_sanitized() {

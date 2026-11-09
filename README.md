@@ -43,6 +43,9 @@ fast chat window, so you can use them the way you'd use ChatGPT, just offline an
   click.
 - **Make it yours:** dark, light or system theme, 8 color themes or your own colors, and full
   control over font, size and spacing.
+- **Voice:** dictate instead of typing and let answers be read aloud with natural voices, all
+  locally (Whisper and Piper, downloaded on first use).
+- **Discord status (optional):** show "Playing ZAP" and what ZAP is doing, never your chats.
 - **English and German,** switchable at any time.
 - **Automatic updates:** ZAP lets you know when a new version is out and shows what's new.
 
@@ -100,7 +103,13 @@ that really come from this project. You can turn the automatic check off, or che
 - ZAP goes online only for:
   - **the update check** (asks GitHub whether there's a new version), which you can turn off;
   - **web search**, only when you turn it on. Your search terms go to the search service you
-    pick, and pages the model asks for are downloaded.
+    pick, and pages the model asks for are downloaded;
+  - **links you paste into a message:** ZAP loads that page so the model can read it. You can turn
+    this off in Settings → Web search;
+  - **one-time downloads** when you set up voice or an engine: speech models, voices and
+    installers come from their official sources and are checked before use.
+- Dictation and reading aloud run on your PC; your voice is never uploaded. The Discord status
+  talks only to the Discord app on your PC.
 - No analytics, no tracking, no telemetry.
 
 ## Requirements

@@ -46,6 +46,9 @@ pub struct AppState {
     pub chat_grants: Mutex<HashSet<String>>,
     /// Keeps the file index current (set once the first index is built).
     pub watcher: Mutex<Option<notify::RecommendedWatcher>>,
+    /// The user chose the built-in search while SearXNG was down: don't ask
+    /// again until ZAP restarts.
+    pub searxng_fallback: AtomicBool,
 }
 
 impl AppState {
@@ -73,6 +76,7 @@ impl AppState {
             approvals: Mutex::new(HashMap::new()),
             chat_grants: Mutex::new(HashSet::new()),
             watcher: Mutex::new(None),
+            searxng_fallback: AtomicBool::new(false),
         }
     }
 

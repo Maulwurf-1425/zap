@@ -10,6 +10,8 @@ import { copyText } from "../lib/format";
 import { modelLabel, parseStats } from "../lib/ipc";
 import { parseAttachments } from "../lib/attachments";
 import { MessageAttachments } from "./Attachments";
+import { ReadAloudButton } from "./Voice";
+import { useVoice } from "../store/voice";
 import { t } from "../lib/i18n";
 
 interface MessageItemProps {
@@ -31,6 +33,7 @@ export const MessageItem = memo(function MessageItem({
   const [editing, setEditing] = useState(false);
   const attachments = useMemo(() => parseAttachments(message.attachments), [message.attachments]);
   const tools = useMemo(() => parseTools(message.tools), [message.tools]);
+  const speaking = useVoice((s) => s.speakingId === message.id);
 
   if (isUser) {
     return (
@@ -91,8 +94,9 @@ export const MessageItem = memo(function MessageItem({
                   .join(" · ")}
               </p>
             )}
-            <Actions align="start">
+            <Actions align="start" visible={speaking}>
               <CopyAction text={message.content} />
+              {message.content.trim() && <ReadAloudButton id={message.id} content={message.content} />}
               {isLastAssistant && <RegenerateAction id={message.id} busy={busy} />}
               <DeleteAction id={message.id} busy={busy} />
             </Actions>
@@ -111,12 +115,20 @@ function Thinking() {
   );
 }
 
-function Actions({ align, children }: { align: "start" | "end"; children: ReactNode }) {
+function Actions({
+  align,
+  visible = false,
+  children,
+}: {
+  align: "start" | "end";
+  visible?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div
-      className={`flex gap-0.5 opacity-0 transition-opacity duration-[var(--dur-hover)] group-hover:opacity-100 focus-within:opacity-100 ${
-        align === "end" ? "-mt-1 justify-end" : "-ml-2"
-      }`}
+      className={`flex gap-0.5 transition-opacity duration-[var(--dur-hover)] group-hover:opacity-100 focus-within:opacity-100 ${
+        visible ? "opacity-100" : "opacity-0"
+      } ${align === "end" ? "-mt-1 justify-end" : "-ml-2"}`}
     >
       {children}
     </div>

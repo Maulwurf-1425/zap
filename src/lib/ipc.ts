@@ -239,6 +239,69 @@ export interface Settings {
   blueprints: Blueprint[] | null;
   /** App version whose "What's new" the user has seen. */
   last_seen_version: string | null;
+  /** Read web pages linked in a message and give their text to the model. */
+  read_links: boolean;
+  /** Whisper model for dictation. */
+  voice_model: "base" | "small";
+  /** Dictation language: "auto" | "de" | "en". */
+  voice_language: "auto" | "de" | "en";
+  /** Microphone name; null = Windows default. */
+  mic_device: string | null;
+  /** Piper voice ids for German and English answers. */
+  voice_de: string;
+  voice_en: string;
+  /** Reading speed 0.5–2.0. */
+  speech_rate: number;
+  /** Read every new answer aloud. */
+  auto_read: boolean;
+  /** Show "Playing ZAP" in Discord. */
+  discord_presence: boolean;
+  /** Include the model name in the Discord status. */
+  discord_show_model: boolean;
+}
+
+export interface DiscordPresence {
+  details: string;
+  state: string | null;
+  /** Session start, Unix ms. */
+  start: number;
+  image_text: string;
+  button: string;
+}
+
+export interface VoiceInfo {
+  id: string;
+  name: string;
+  lang: "de" | "en";
+  gender: "female" | "male";
+  size: number;
+  installed: boolean;
+}
+
+export interface VoiceStatus {
+  whisper: boolean;
+  whisper_size: number;
+  piper: boolean;
+  piper_size: number;
+  models: { id: "base" | "small"; size: number; installed: boolean }[];
+  voices: VoiceInfo[];
+  microphones: { id: string; name: string; is_default: boolean }[];
+}
+
+export interface VoiceDownloadEvent {
+  /** "dictation:<model>" | "voice:<id>" */
+  item: string;
+  /** "whisper" | "model" | "piper" | "voice" */
+  part: string;
+  downloaded: number;
+  /** 0 when unknown (small files). */
+  total: number;
+}
+
+export interface SpeakingEvent {
+  id: string;
+  active: boolean;
+  error: string | null;
 }
 
 export type FontFamily = "inter" | "system" | "serif" | "mono";
@@ -250,6 +313,22 @@ export interface Blueprint {
   icon: string;
   /** Send right away instead of filling the composer. */
   send: boolean;
+}
+
+export interface LinkResult {
+  page: { title: string; url: string; text: string } | null;
+  /** Same codes as the fetch_page tool (t.web.errors). */
+  error: string | null;
+}
+
+export type InstallPhase = "preparing" | "downloading" | "installing" | "starting" | "done" | "failed";
+
+export interface EngineInstallEvent {
+  provider: ProviderKind;
+  phase: InstallPhase;
+  /** Bytes downloaded and installer size, while downloading (null if unknown). */
+  downloaded: number | null;
+  total: number | null;
 }
 
 export interface StatusEvent {
@@ -317,6 +396,22 @@ export const api = {
 
   providerStatus: () => invoke<Statuses>("provider_status"),
   providerStart: (provider: ProviderKind) => invoke<ProviderStatus>("provider_start", { provider }),
+  readLink: (url: string) => invoke<LinkResult>("read_link", { url }),
+  discordAvailable: () => invoke<boolean>("discord_available"),
+  discordUpdate: (presence: DiscordPresence) => invoke<void>("discord_update", { presence }),
+  discordClear: () => invoke<void>("discord_clear"),
+  voiceStatus: () => invoke<VoiceStatus>("voice_status"),
+  voiceInstall: (item: string) => invoke<void>("voice_install", { item }),
+  voiceRemove: (item: string) => invoke<void>("voice_remove", { item }),
+  recordStart: () => invoke<void>("record_start"),
+  recordStop: () => invoke<string>("record_stop"),
+  recordCancel: () => invoke<void>("record_cancel"),
+  speakStart: (id: string, voiceId: string) => invoke<void>("speak_start", { id, voiceId }),
+  speakPush: (id: string, text: string) => invoke<void>("speak_push", { id, text }),
+  speakEnd: (id: string) => invoke<void>("speak_end", { id }),
+  speakStop: () => invoke<void>("speak_stop"),
+  engineInstallSupported: () => invoke<boolean>("engine_install_supported"),
+  installEngine: (provider: ProviderKind) => invoke<ProviderStatus>("install_engine", { provider }),
 
   listModels: () => invoke<ModelInfo[]>("list_models"),
   modelCapabilities: (model: string) => invoke<ModelCaps>("model_capabilities", { model }),
@@ -380,6 +475,16 @@ export const api = {
 export const events = {
   onProviderStatus: (cb: (e: StatusEvent) => void): Promise<UnlistenFn> =>
     listen<StatusEvent>("provider://status", (e) => cb(e.payload)),
+  onDiscordStatus: (cb: (connected: boolean) => void): Promise<UnlistenFn> =>
+    listen<{ connected: boolean }>("discord://status", (e) => cb(e.payload.connected)),
+  onVoiceDownload: (cb: (e: VoiceDownloadEvent) => void): Promise<UnlistenFn> =>
+    listen<VoiceDownloadEvent>("voice://download", (e) => cb(e.payload)),
+  onVoiceLevel: (cb: (level: number) => void): Promise<UnlistenFn> =>
+    listen<{ level: number }>("voice://level", (e) => cb(e.payload.level)),
+  onSpeaking: (cb: (e: SpeakingEvent) => void): Promise<UnlistenFn> =>
+    listen<SpeakingEvent>("voice://speaking", (e) => cb(e.payload)),
+  onEngineInstall: (cb: (e: EngineInstallEvent) => void): Promise<UnlistenFn> =>
+    listen<EngineInstallEvent>("engine://install", (e) => cb(e.payload)),
   onPullProgress: (cb: (p: PullProgress) => void): Promise<UnlistenFn> =>
     listen<PullProgress>("model://progress", (e) => cb(e.payload)),
   onToken: (cb: (e: TokenEvent) => void): Promise<UnlistenFn> =>

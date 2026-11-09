@@ -16,11 +16,12 @@ import {
   composeContent,
   imagesOf,
   MAX_ATTACHMENTS,
+  extractLinks,
   parseAttachments,
   serializeAttachments,
   type Attachment,
 } from "../lib/attachments";
-import { copyText, sortChats, uid } from "../lib/format";
+import { copyText, hostOf, sortChats, uid } from "../lib/format";
 import { t } from "../lib/i18n";
 import { useModels } from "./models";
 import { useSettings } from "./settings";
@@ -185,6 +186,23 @@ function toPayload(m: UiMessage, vision: boolean): PayloadMessage {
   };
 }
 
+/** "Current date and time: Monday, 9 November 2026, 12:45 (user's local time, UTC+01:00)." */
+export function dateContext(now = new Date()): string {
+  const when = now.toLocaleString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const offset = -now.getTimezoneOffset();
+  const sign = offset >= 0 ? "+" : "-";
+  const hh = String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0");
+  const mm = String(Math.abs(offset) % 60).padStart(2, "0");
+  return `Current date and time: ${when.replace(" at ", ", ")} (the user's local time, UTC${sign}${hh}:${mm}).`;
+}
+
 /** Tool activity of a reply (stored as JSON). */
 export function parseTools(raw: string | null | undefined): ToolActivity[] {
   if (!raw) return [];
@@ -264,17 +282,70 @@ export const useChats = create<ChatsState>((set, get) => {
   }
 
   /** Starts streaming an assistant reply for the chat's current history. */
+  /** Chats whose reply is still waiting for linked pages (stop ends it locally). */
+  const readingLinks = new Set<string>();
+
+  /** Reads web pages linked in the last user message (once) and stores their
+   *  text as attachments, so every model gets the content. Shows a card per
+   *  link on the reply being generated. */
+  async function readLinks(chatId: string) {
+    if (!useSettings.getState().settings.read_links) return;
+    const user = [...(get().messages[chatId] ?? [])].reverse().find((m) => m.role === "user");
+    if (!user) return;
+    const inText = extractLinks(user.content);
+    const stored = parseAttachments(user.attachments);
+    // Pages whose link was edited out of the message are dropped.
+    const existing = stored.filter((a) => !a.url || inText.includes(a.url));
+    const known = new Set(existing.map((a) => a.url));
+    const links = inText.filter((url) => !known.has(url));
+    if (links.length === 0) {
+      if (existing.length !== stored.length) await saveAttachments(chatId, user, existing);
+      return;
+    }
+
+    const pages = await Promise.all(
+      links.map(async (url): Promise<Attachment | null> => {
+        const activity: ToolActivity = { id: uid(), name: "fetch_page", input: url, status: "running", sources: [] };
+        applyToolActivity(chatId, activity);
+        try {
+          const { page, error } = await api.readLink(url);
+          if (page) {
+            const title = page.title || hostOf(page.url);
+            applyToolActivity(chatId, { ...activity, status: "done", sources: [{ title, url: page.url }] });
+            return {
+              id: uid(),
+              name: title,
+              kind: "text",
+              mime: "text/html",
+              size: page.text.length,
+              data: page.text,
+              url,
+            };
+          }
+          applyToolActivity(chatId, { ...activity, status: "error", error: error ?? "fetch_failed" });
+        } catch {
+          applyToolActivity(chatId, { ...activity, status: "error", error: "fetch_failed" });
+        }
+        return null;
+      }),
+    );
+    const read = pages.filter((p): p is Attachment => p !== null);
+    if (read.length > 0 || existing.length !== stored.length)
+      await saveAttachments(chatId, user, [...existing, ...read]);
+  }
+
+  async function saveAttachments(chatId: string, message: UiMessage, attachments: Attachment[]) {
+    const updated = { ...message, attachments: serializeAttachments(attachments) };
+    setMessages(
+      chatId,
+      (get().messages[chatId] ?? []).map((m) => (m.id === message.id ? updated : m)),
+    );
+    await api.saveMessage(toNew(updated)).catch(() => undefined);
+  }
+
   async function generate(chatId: string, model: string) {
     // Images only go to vision models; others get a text placeholder.
     const { vision, tools } = await useModels.getState().ensureCaps(model);
-    const history = (get().messages[chatId] ?? []).filter((m) => m.content.trim() !== "" || m.attachments);
-    const { system_prompt, temperature, context_length } = useSettings.getState().settings;
-    const chat = get().chats.find((c) => c.id === chatId);
-    const system = (chat?.system_prompt ?? system_prompt).trim();
-    const payload = [
-      ...(system ? [{ role: "system" as const, content: system }] : []),
-      ...history.map((m) => toPayload(m, vision)),
-    ];
 
     const assistant: UiMessage = {
       id: uid(),
@@ -294,6 +365,25 @@ export const useChats = create<ChatsState>((set, get) => {
       errors: without(get().errors, chatId),
     });
     useUi.getState().announce(t.chat.replyStarted);
+
+    readingLinks.add(chatId);
+    await readLinks(chatId);
+    readingLinks.delete(chatId);
+    // Stopped or deleted while the links were read.
+    if (get().generating[chatId]?.messageId !== assistant.id) return;
+
+    const history = (get().messages[chatId] ?? []).filter(
+      (m) => m.id !== assistant.id && (m.content.trim() !== "" || m.attachments),
+    );
+    const { system_prompt, temperature, context_length } = useSettings.getState().settings;
+    const chat = get().chats.find((c) => c.id === chatId);
+    const system = (chat?.system_prompt ?? system_prompt).trim();
+    const payload = [
+      // Models don't know the date; "today" or "tomorrow" need it.
+      { role: "system" as const, content: dateContext() },
+      ...(system ? [{ role: "system" as const, content: system }] : []),
+      ...history.map((m) => toPayload(m, vision)),
+    ];
 
     try {
       // Web tools only for models that can call tools.
@@ -444,7 +534,10 @@ export const useChats = create<ChatsState>((set, get) => {
 
     stop: (chatId) => {
       const id = chatId ?? get().activeId;
-      if (id && get().generating[id]) void api.stopGeneration(id);
+      if (!id || !get().generating[id]) return;
+      // Still reading links: nothing runs in the backend yet, end it here.
+      if (readingLinks.delete(id)) void finish(id, null, null, true);
+      else void api.stopGeneration(id);
     },
 
     regenerate: async (messageId) => {

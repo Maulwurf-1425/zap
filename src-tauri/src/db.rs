@@ -277,6 +277,25 @@ pub struct Settings {
     pub blueprints: Option<Vec<Blueprint>>,
     /// App version whose "What's new" the user has seen.
     pub last_seen_version: Option<String>,
+    /// Read web pages linked in a message and give their text to the model.
+    pub read_links: bool,
+    /// Whisper model for dictation: "base" | "small".
+    pub voice_model: String,
+    /// Dictation language for Whisper: "auto" | "de" | "en".
+    pub voice_language: String,
+    /// Microphone name; `None` uses the Windows default.
+    pub mic_device: Option<String>,
+    /// Piper voice ids for German and English answers.
+    pub voice_de: String,
+    pub voice_en: String,
+    /// Reading speed, 0.5–2.0 (1.0 = normal).
+    pub speech_rate: f32,
+    /// Read every new answer aloud.
+    pub auto_read: bool,
+    /// Show "Playing ZAP" in Discord.
+    pub discord_presence: bool,
+    /// Include the model name in the Discord status.
+    pub discord_show_model: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -322,6 +341,16 @@ impl Default for Settings {
             paragraph_spacing: 0.875,
             blueprints: None,
             last_seen_version: None,
+            read_links: true,
+            voice_model: "base".into(),
+            voice_language: "auto".into(),
+            mic_device: None,
+            voice_de: "de_DE-thorsten-medium".into(),
+            voice_en: "en_US-amy-medium".into(),
+            speech_rate: 1.0,
+            auto_read: false,
+            discord_presence: false,
+            discord_show_model: true,
         }
     }
 }

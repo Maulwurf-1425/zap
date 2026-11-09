@@ -5,11 +5,14 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
 
+use std::sync::atomic::Ordering;
+
 use crate::db;
+use crate::docker::{self, DockerState, StartStep};
 use crate::error::AppError;
 use crate::file_tools;
 use crate::provider::{ChatStats, ToolCall};
-use crate::state::AppState;
+use crate::state::{lock, AppState, Decision};
 use crate::web::{self, SearchConfig, SearchProvider};
 
 const KEYRING_SERVICE: &str = "ZAP";
@@ -166,7 +169,20 @@ pub async fn search(
     query: &str,
     max: usize,
 ) -> Result<Vec<web::SearchResult>, AppError> {
-    let (cfg, limit) = search_config(state);
+    search_as(state, None, query, max).await
+}
+
+/// Like `search`, optionally with another provider than the configured one.
+async fn search_as(
+    state: &AppState,
+    provider: Option<SearchProvider>,
+    query: &str,
+    max: usize,
+) -> Result<Vec<web::SearchResult>, AppError> {
+    let (mut cfg, limit) = search_config(state);
+    if let Some(p) = provider {
+        cfg.provider = p;
+    }
     let name = provider_name(cfg.provider);
     let month = db::current_month();
     if cfg.provider == SearchProvider::Brave {
@@ -178,6 +194,111 @@ pub async fn search(
     let results = web::search(&state.web, &cfg, query, max).await?;
     db::record_search(&state.db(), &month, name)?;
     Ok(results)
+}
+
+/// The built-in search in place of a failed provider. The activity's
+/// `detail` tells the UI why: "fallback:<provider>:<reason code>".
+async fn fallback(
+    state: &AppState,
+    query: &str,
+    max: usize,
+    activity: &mut ToolActivity,
+    provider: &str,
+    reason: &str,
+) -> Result<Vec<web::SearchResult>, AppError> {
+    activity.detail = Some(format!("fallback:{provider}:{reason}"));
+    search_as(state, Some(SearchProvider::Builtin), query, max).await
+}
+
+/// Searches with the configured provider and never leaves the model without
+/// results when another service is down: Brave errors fall back to the
+/// built-in search right away; for an unreachable SearXNG the user decides
+/// whether ZAP starts Docker or uses the built-in search.
+async fn search_or_fallback(
+    state: &AppState,
+    ctx: &ToolCtx<'_>,
+    query: &str,
+    max: usize,
+    activity: &mut ToolActivity,
+) -> Result<Vec<web::SearchResult>, AppError> {
+    let provider = search_config(state).0.provider;
+    let err = match search(state, query, max).await {
+        Ok(results) => return Ok(results),
+        Err(err) => err,
+    };
+    let code = error_code(&err);
+    match provider {
+        SearchProvider::Builtin => Err(err),
+        SearchProvider::Brave => fallback(state, query, max, activity, "brave", code).await,
+        SearchProvider::Searxng => {
+            if !matches!(err, AppError::Unreachable)
+                || state.searxng_fallback.load(Ordering::Relaxed)
+            {
+                return fallback(state, query, max, activity, "searxng", code).await;
+            }
+            match start_searxng_if_wanted(state, ctx, activity).await {
+                Some(true) => match search(state, query, max).await {
+                    Ok(results) => Ok(results),
+                    Err(e) => {
+                        fallback(state, query, max, activity, "searxng", error_code(&e)).await
+                    }
+                },
+                Some(false) => {
+                    fallback(state, query, max, activity, "searxng", "start_failed").await
+                }
+                None => {
+                    // The user picked the built-in search (or Docker is missing).
+                    state.searxng_fallback.store(true, Ordering::Relaxed);
+                    fallback(state, query, max, activity, "searxng", "unreachable").await
+                }
+            }
+        }
+    }
+}
+
+/// Asks whether to start Docker for SearXNG and does it. `Some(ok)` after a
+/// start attempt, `None` when the built-in search should be used instead.
+async fn start_searxng_if_wanted(
+    state: &AppState,
+    ctx: &ToolCtx<'_>,
+    activity: &mut ToolActivity,
+) -> Option<bool> {
+    let docker_state = docker::state().await;
+    if docker_state == DockerState::Missing {
+        return None;
+    }
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    lock(&state.approvals).insert(activity.id.clone(), tx);
+    activity.status = "pending".into();
+    activity.detail = Some(format!("searxng_down:{}", docker_state.code()));
+    ctx.emit(activity);
+    let decision = tokio::select! {
+        _ = ctx.cancel.cancelled() => None,
+        d = rx => d.ok(),
+    };
+    lock(&state.approvals).remove(&activity.id);
+    activity.status = "running".into();
+    if decision != Some(Decision::Allow) {
+        activity.detail = None;
+        ctx.emit(activity);
+        return None;
+    }
+
+    let url = search_config(state).0.searxng_url;
+    let ok = docker::start_searxng(&state.http, &url, ctx.cancel, |step| {
+        activity.detail = Some(
+            match step {
+                StartStep::Docker => "starting:docker",
+                StartStep::Searxng => "starting:searxng",
+            }
+            .into(),
+        );
+        ctx.emit(activity);
+    })
+    .await;
+    activity.detail = None;
+    ctx.emit(activity);
+    Some(ok)
 }
 
 // --- Running tools ---------------------------------------------------------------
@@ -219,7 +340,7 @@ pub async fn run_any(
     if file_tools::NAMES.contains(&call.name.as_str()) {
         file_tools::run(state, ctx, call, activity).await
     } else {
-        run_tool(state, call, activity).await
+        run_tool(state, ctx, call, activity).await
     }
 }
 
@@ -228,8 +349,9 @@ pub async fn run_any(
 /// answer (and say that the lookup did not work).
 async fn run_tool(
     state: &AppState,
+    ctx: &ToolCtx<'_>,
     call: &ToolCall,
-    activity: ToolActivity,
+    mut activity: ToolActivity,
 ) -> (ToolActivity, String) {
     match call.name.as_str() {
         web::TOOL_SEARCH => {
@@ -240,7 +362,7 @@ async fn run_tool(
                 return (activity.failed("failed"), "Error: missing query.".into());
             }
             let query = activity.input.clone();
-            match search(state, &query, max).await {
+            match search_or_fallback(state, ctx, &query, max, &mut activity).await {
                 Ok(results) => {
                     let sources = results
                         .iter()

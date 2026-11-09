@@ -4,6 +4,42 @@ Each release has a `## <version>` heading, optionally followed by ` – <update 
 and one `### English` and one `### Deutsch` section. The release workflow publishes the
 section of the tagged version, and ZAP shows it before and after updating.
 
+## 0.4.0 – The Voice arrival
+
+### English
+
+- **Dictation:** click or hold the new microphone button and speak; ZAP writes it down. Runs
+  entirely on your PC (Whisper), German and English.
+- **Read aloud:** a speaker button on every answer, with natural local voices (Piper). Pick your
+  voices and speed under Settings → Voice, or let ZAP read new answers automatically.
+- **Show in Discord:** "Playing ZAP" with what ZAP is doing right now, never your chats. Turn it
+  on under Settings → General.
+- **Install engines from ZAP:** Ollama or LM Studio missing? ZAP installs them for you, with
+  live progress.
+- **Paste a link:** ZAP reads the page so every model can talk about it.
+- **Smarter web search:** the model knows today's date, cites its sources and falls back to the
+  built-in search when another service is down. If SearXNG isn't running, ZAP asks whether to
+  start Docker.
+- **Fixes:** Qwen models with web search work again; fewer odd answers from small models.
+
+### Deutsch
+
+- **Diktieren:** Klick oder halte den neuen Mikrofon-Knopf und sprich, ZAP schreibt es auf. Läuft
+  komplett auf deinem PC (Whisper), Deutsch und Englisch.
+- **Vorlesen:** ein Lautsprecher-Knopf an jeder Antwort, mit natürlichen lokalen Stimmen (Piper).
+  Stimmen und Tempo wählst du unter Einstellungen → Sprache & Stimme, oder ZAP liest neue
+  Antworten automatisch vor.
+- **In Discord anzeigen:** „Spielt ZAP“ mit dem, was ZAP gerade macht, nie deine Chats. Einschalten
+  unter Einstellungen → Allgemein.
+- **Engines aus ZAP installieren:** Fehlt Ollama oder LM Studio, installiert ZAP es für dich, mit
+  Live-Fortschritt.
+- **Link einfügen:** ZAP liest die Seite, damit jedes Modell darüber sprechen kann.
+- **Klügere Websuche:** Das Modell kennt das heutige Datum, nennt seine Quellen und weicht auf die
+  eingebaute Suche aus, wenn ein anderer Dienst nicht geht. Läuft SearXNG nicht, fragt ZAP, ob es
+  Docker starten soll.
+- **Korrekturen:** Qwen-Modelle mit Websuche funktionieren wieder; weniger seltsame Antworten
+  kleiner Modelle.
+
 ## 0.3.1 – Fancyness Update
 
 ### English

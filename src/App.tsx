@@ -16,6 +16,8 @@ import { useProviders } from "./store/providers";
 import { applySettingsAppearance, useSettings } from "./store/settings";
 import { isOverlayOpen, useUi } from "./store/ui";
 import { useUpdates } from "./store/updates";
+import { useVoice } from "./store/voice";
+import { useDiscord } from "./store/discord";
 import { watchSystemTheme } from "./lib/theme";
 
 const COLLAPSE_BELOW = 1000;
@@ -49,6 +51,14 @@ export default function App() {
     void (async () => {
       await useSettings.getState().load();
       await Promise.all([useProviders.getState().init(), useModels.getState().init(), useChats.getState().init()]);
+      void useDiscord
+        .getState()
+        .init()
+        .catch(() => undefined);
+      void useVoice
+        .getState()
+        .init()
+        .catch(() => undefined);
       if (!useSettings.getState().settings.onboarding_done) useUi.getState().setOnboardingOpen(true);
       void useUpdates
         .getState()

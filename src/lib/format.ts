@@ -38,6 +38,15 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** "example.com" for a URL (without "www."), or the input if it isn't one. */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 /** Opens http(s) links in the default browser, never inside the app. */
 export async function openExternal(href: string): Promise<boolean> {
   try {

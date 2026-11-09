@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Download, TriangleAlert } from "lucide-react";
 import { DotField } from "./EmptyState";
-import { openEngineDownload } from "../lib/actions";
+import { EngineInstall } from "./EngineInstall";
 import { primaryProvider, useProviders } from "../store/providers";
 import { useUi } from "../store/ui";
 import { engineName, errorMessage, t } from "../lib/i18n";
@@ -54,12 +54,12 @@ export function EngineNotice() {
   if (status === "not_found") {
     return (
       <Hero title={t.engines.missingTitle(name)} body={t.engines.missing(name)}>
-        <button className="btn btn-primary" onClick={() => openEngineDownload(kind)}>
-          {t.engines.installCta(name)}
-        </button>
-        <button className="btn btn-secondary h-11" onClick={() => void start(kind)}>
-          {t.engines.recheck}
-        </button>
+        <div className="flex flex-col items-center gap-4">
+          <EngineInstall kind={kind} centered />
+          <button className="btn btn-ghost text-fg-muted" onClick={() => void start(kind)}>
+            {t.engines.recheck}
+          </button>
+        </div>
       </Hero>
     );
   }

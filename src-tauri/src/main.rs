@@ -1,18 +1,23 @@
 // Hide the console window in release builds on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod audio;
 mod commands;
 mod db;
+mod discord;
+mod docker;
 mod engine;
 mod error;
 mod file_tools;
 mod files;
+mod installer;
 mod lmstudio;
 mod ndjson;
 mod ollama;
 mod provider;
 mod state;
 mod tools;
+mod voice;
 mod web;
 
 use tauri::{Manager, RunEvent};
@@ -54,6 +59,8 @@ fn main() {
             std::fs::create_dir_all(&dir)?;
             let conn = db::open(&dir.join("zap.db"))?;
             app.manage(AppState::new(conn, dir.clone()));
+            app.manage(voice::VoiceState::default());
+            app.manage(discord::DiscordState::default());
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.restore_state(window_flags());
@@ -71,6 +78,22 @@ fn main() {
             commands::app_info,
             commands::provider_status,
             commands::provider_start,
+            commands::read_link,
+            discord::discord_available,
+            discord::discord_update,
+            discord::discord_clear,
+            voice::voice_status,
+            voice::voice_install,
+            voice::voice_remove,
+            voice::record_start,
+            voice::record_stop,
+            voice::record_cancel,
+            voice::speak_start,
+            voice::speak_push,
+            voice::speak_end,
+            voice::speak_stop,
+            commands::engine_install_supported,
+            commands::install_engine,
             commands::list_models,
             commands::model_capabilities,
             commands::show_model,

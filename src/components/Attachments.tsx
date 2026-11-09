@@ -124,7 +124,8 @@ export function AttachmentChip({
 /** Attachments of a sent message: image previews and file chips. */
 export function MessageAttachments({ attachments }: { attachments: Attachment[] }) {
   const images = attachments.filter((a) => a.kind === "image");
-  const files = attachments.filter((a) => a.kind === "text");
+  // Pages read from links show as cards on the reply instead.
+  const files = attachments.filter((a) => a.kind === "text" && !a.url);
   return (
     <div className="flex max-w-[80%] flex-col items-end gap-2" aria-label={t.attach.label}>
       {images.length > 0 && (

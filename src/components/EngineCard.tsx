@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Switch } from "./ui/Controls";
 import { useProviders } from "../store/providers";
 import { LMSTUDIO_DEFAULT_PORT, useSettings } from "../store/settings";
-import { openEngineDownload } from "../lib/actions";
+import { EngineInstall } from "./EngineInstall";
 import { engineName, t } from "../lib/i18n";
 import type { ProviderKind, ProviderStatus } from "../lib/ipc";
 
@@ -51,11 +51,6 @@ export function EngineCard({ kind, showPort = false }: { kind: ProviderKind; sho
             {t.engines.status[status]}
           </div>
         </div>
-        {enabled && status === "not_found" && (
-          <button className="btn btn-secondary h-9" onClick={() => openEngineDownload(kind)}>
-            {t.engines.install}
-          </button>
-        )}
         {enabled && status === "stopped" && (
           <button className="btn btn-secondary h-9" onClick={() => void start(kind)}>
             {t.engines.start}
@@ -63,6 +58,7 @@ export function EngineCard({ kind, showPort = false }: { kind: ProviderKind; sho
         )}
         <Switch id={switchId} label={t.engines.use(name)} checked={enabled} onChange={(on) => void toggle(on)} />
       </div>
+      {enabled && status === "not_found" && <EngineInstall kind={kind} />}
       {showPort && enabled && <PortField key={settings.lmstudio_port} saved={settings.lmstudio_port} />}
     </div>
   );

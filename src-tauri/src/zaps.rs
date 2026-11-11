@@ -7,7 +7,9 @@
 //! Runs go through a channel to one runner task: the chat tool that starts a
 //! ZAP lives inside the agent loop, which can't spawn itself directly.
 
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 use serde::Serialize;
 use serde_json::json;
@@ -16,10 +18,11 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::commands::{self, AgentTarget, RunLog, MAX_ZAP_ROUNDS};
-use crate::db::{self, Zap, ZapRun, ZapTools};
+use crate::db::{self, Zap, ZapRun, ZapSchedule, ZapTools};
 use crate::engine;
 use crate::error::{AppError, AppResult};
 use crate::provider::{ChatMessage, ChatOptions, ChatProvider, ToolCall, ToolSpec};
+use crate::schedule;
 use crate::state::{lock, AppState, Decision};
 use crate::system_tools::truncate_output;
 use crate::tools::{self, ToolActivity, ToolCtx};
@@ -67,6 +70,139 @@ fn emit_run(app: &AppHandle, run: &ZapRun) {
 
 fn emit_changed(app: &AppHandle) {
     let _ = app.emit("zap://changed", ());
+}
+
+// --- Notifications -------------------------------------------------------------
+
+/// Whether the user is looking at ZAP right now (then the UI says enough).
+fn window_in_focus(app: &AppHandle) -> bool {
+    app.get_webview_window("main").is_some_and(|w| {
+        w.is_visible().unwrap_or(false)
+            && !w.is_minimized().unwrap_or(false)
+            && w.is_focused().unwrap_or(false)
+    })
+}
+
+/// German UI? (Notifications come from Rust, so they pick the language here.)
+fn german(state: &AppState) -> bool {
+    db::get_settings(&state.db()).is_ok_and(|s| s.language == "de")
+}
+
+/// A Windows notification, when enabled and ZAP is not in front.
+fn notify(app: &AppHandle, title: &str, body: &str) {
+    use tauri_plugin_notification::NotificationExt;
+    let state = app.state::<AppState>();
+    let enabled = db::get_settings(&state.db()).is_ok_and(|s| s.zap_notifications);
+    if !enabled || window_in_focus(app) {
+        return;
+    }
+    let _ = app.notification().builder().title(title).body(body).show();
+}
+
+fn zap_name_of_run(state: &AppState, run_id: &str) -> Option<String> {
+    let run = db::active_runs(&state.db())
+        .ok()?
+        .into_iter()
+        .find(|r| r.id == run_id)?;
+    db::get_zap(&state.db(), &run.zap_id)
+        .ok()
+        .flatten()
+        .map(|z| z.name)
+}
+
+/// A ZAP run waits for the user's OK (called for every pending approval).
+pub fn notify_waiting(app: &AppHandle, run_id: &str) {
+    let state = app.state::<AppState>();
+    let Some(name) = zap_name_of_run(&state, run_id) else {
+        return;
+    };
+    if german(&state) {
+        notify(
+            app,
+            &format!("ZAP „{name}“ wartet auf dein OK"),
+            "Öffne ZAP, um den Schritt zu erlauben oder abzulehnen.",
+        );
+    } else {
+        notify(
+            app,
+            &format!("ZAP “{name}” is waiting for your OK"),
+            "Open ZAP to allow or deny the step.",
+        );
+    }
+}
+
+/// A scheduled start didn't work (no model, engine missing, …).
+pub fn notify_failed_start(app: &AppHandle, name: &str, reason: &str) {
+    let state = app.state::<AppState>();
+    let de = german(&state);
+    let why = match (reason, de) {
+        ("no_model", true) => {
+            "Kein Modell gewählt. Leg eins im ZAP oder ein Standardmodell in den Einstellungen fest."
+        }
+        ("no_model", false) => "No model chosen. Set one in the ZAP or a default model in the settings.",
+        (_, true) => "Der geplante Start hat nicht geklappt.",
+        (_, false) => "The scheduled start didn't work.",
+    };
+    let title = if de {
+        format!("ZAP „{name}“ konnte nicht starten")
+    } else {
+        format!("ZAP “{name}” couldn't start")
+    };
+    notify(app, &title, why);
+}
+
+/// Stores a scheduled start that couldn't run, so the schedule moves on and
+/// the user sees why in the run history.
+pub fn record_skipped(state: &AppState, zap_id: &str, error: &str) {
+    let now = db::now_ms();
+    let _ = db::save_run(
+        &state.db(),
+        &ZapRun {
+            id: uuid::Uuid::new_v4().to_string(),
+            zap_id: zap_id.into(),
+            input: None,
+            source: "schedule".into(),
+            status: "failed".into(),
+            output: String::new(),
+            activities: None,
+            stats: None,
+            error: Some(error.into()),
+            started_at: now,
+            ended_at: Some(now),
+            model: None,
+        },
+    );
+}
+
+fn notify_finished(app: &AppHandle, zap: &Zap, run: &ZapRun) {
+    let state = app.state::<AppState>();
+    let de = german(&state);
+    let title = match (run.status.as_str(), de) {
+        ("done", true) => format!("ZAP „{}“ ist fertig", zap.name),
+        ("done", false) => format!("ZAP “{}” is done", zap.name),
+        (_, true) => format!("ZAP „{}“ hat aufgehört", zap.name),
+        (_, false) => format!("ZAP “{}” stopped", zap.name),
+    };
+    // First lines of the report as a preview (without Markdown marks).
+    let preview: String = run
+        .output
+        .lines()
+        .map(|l| l.trim().trim_start_matches(['#', '*', '-', ' ']))
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace("**", "")
+        .chars()
+        .take(160)
+        .collect();
+    let body = if !preview.is_empty() {
+        preview
+    } else if de {
+        "Details stehen im Verlauf des ZAPs.".to_string()
+    } else {
+        "See the ZAP's run history for details.".to_string()
+    };
+    notify(app, &title, &body);
 }
 
 /// The system prompt of a run.
@@ -184,14 +320,15 @@ async fn execute(app: &AppHandle, job: Job) {
         ChatMessage::text("user", input),
     ];
     let t = &zap.tools;
-    // The chat's context size: a different one makes Ollama reload the model.
-    let num_ctx = db::get_settings(&state.db())
-        .ok()
-        .and_then(|s| s.context_length);
+    let settings = db::get_settings(&state.db()).ok();
     let options = ChatOptions {
         // Low temperature: steady tool calls, fewer detours.
         temperature: Some(ZAP_TEMPERATURE),
-        num_ctx,
+        // The chat's context size: a different one makes Ollama reload the model.
+        num_ctx: settings.as_ref().and_then(|s| s.context_length),
+        keep_alive_min: settings.as_ref().and_then(|s| s.model_idle_minutes),
+        think: (!zap.thinking).then_some(false),
+        token_budget: zap.token_budget,
         web: t.web,
         files: t.files,
         terminal: t.terminal,
@@ -199,6 +336,16 @@ async fn execute(app: &AppHandle, job: Job) {
         max_rounds: Some(zap.max_steps),
         ..Default::default()
     };
+    // Time limit: stop the run when it's up.
+    let timed_out = Arc::new(AtomicBool::new(false));
+    let timer = zap.time_limit.map(|min| {
+        let (token, timed_out) = (token.clone(), timed_out.clone());
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(u64::from(min) * 60)).await;
+            timed_out.store(true, Ordering::Relaxed);
+            token.cancel();
+        })
+    });
     let (provider, model_name) = engine::route(&state, &model);
     let mut used = None;
     let mut log = RunLog::default();
@@ -231,6 +378,9 @@ async fn execute(app: &AppHandle, job: Job) {
         .map(|_| ())
     };
 
+    if let Some(timer) = timer {
+        timer.abort();
+    }
     lock(&state.chat_tokens).remove(&run.id);
     lock(&state.chat_grants).remove(&run.id);
     run.output = log.text.trim().to_string();
@@ -243,7 +393,16 @@ async fn execute(app: &AppHandle, job: Job) {
     }
     match result {
         Ok(()) => run.status = "done".into(),
-        Err(AppError::Cancelled) => run.status = "stopped".into(),
+        Err(AppError::Cancelled) => {
+            run.status = "stopped".into();
+            if timed_out.load(Ordering::Relaxed) {
+                run.error = Some("time_limit".into());
+            }
+        }
+        Err(AppError::Other(code)) if code == "token_limit" => {
+            run.status = "stopped".into();
+            run.error = Some(code);
+        }
         Err(err) => {
             run.status = "failed".into();
             run.error = Some(match &err {
@@ -254,13 +413,24 @@ async fn execute(app: &AppHandle, job: Job) {
     }
     let _ = db::save_run(&state.db(), &run);
     emit_run(app, &run);
+    // Stopping by hand needs no notice; limits and everything else do.
+    if run.status != "stopped" || run.error.is_some() {
+        notify_finished(app, &zap, &run);
+    }
 }
 
 // --- Tauri commands ----------------------------------------------------------
 
+/// All ZAPs, with their next scheduled start filled in.
 #[tauri::command]
 pub fn zaps_list(state: State<'_, AppState>) -> AppResult<Vec<Zap>> {
-    db::list_zaps(&state.db())
+    let mut zaps = db::list_zaps(&state.db())?;
+    let now = chrono::Local::now();
+    for zap in &mut zaps {
+        let last = db::last_scheduled_run(&state.db(), &zap.id)?;
+        zap.next_run = schedule::next_run(&zap.schedule, zap.updated_at, last, now);
+    }
+    Ok(zaps)
 }
 
 fn validate(zap: &mut Zap) -> AppResult<()> {
@@ -273,7 +443,27 @@ fn validate(zap: &mut Zap) -> AppResult<()> {
         zap.icon = "sparkles".into();
     }
     zap.max_steps = zap.max_steps.clamp(2, MAX_ZAP_ROUNDS as u32);
+    clean_schedule(&mut zap.schedule);
+    zap.token_budget = zap.token_budget.filter(|n| *n > 0).map(|n| n.max(1_000));
+    zap.time_limit = zap.time_limit.filter(|n| *n > 0).map(|n| n.min(24 * 60));
     Ok(())
+}
+
+/// Keeps only valid schedules (unknown kinds turn the schedule off).
+fn clean_schedule(s: &mut ZapSchedule) {
+    match s.kind.as_str() {
+        "interval" => s.every_min = s.every_min.clamp(5, 7 * 24 * 60),
+        "daily" => {
+            if chrono::NaiveTime::parse_from_str(&s.time, "%H:%M").is_err() {
+                s.time = "08:00".into();
+            }
+            s.days.retain(|d| *d < 7);
+            s.days.sort_unstable();
+            s.days.dedup();
+        }
+        "startup" => {}
+        _ => *s = ZapSchedule::default(),
+    }
 }
 
 /// Creates (empty id) or updates a ZAP.
@@ -288,6 +478,8 @@ pub fn zap_save(app: AppHandle, state: State<'_, AppState>, mut zap: Zap) -> App
     zap.updated_at = now;
     db::save_zap(&state.db(), &zap)?;
     emit_changed(&app);
+    let last = db::last_scheduled_run(&state.db(), &zap.id)?;
+    zap.next_run = schedule::next_run(&zap.schedule, zap.updated_at, last, chrono::Local::now());
     Ok(zap)
 }
 
@@ -368,7 +560,11 @@ pub fn tool_specs() -> Vec<ToolSpec> {
                         "items": { "type": "string", "enum": ["web", "files", "terminal", "apps"] },
                         "description": "What it may use: web (search and read pages), files (search/read/write files), terminal (PowerShell commands), apps (open apps, files and links). Only what the task needs."
                     },
-                    "max_steps": { "type": "integer", "description": "Upper bound for its steps (default 20, max 60)" }
+                    "max_steps": { "type": "integer", "description": "Upper bound for its steps (default 20, max 60)" },
+                    "schedule": { "type": "string", "enum": ["off", "startup", "interval", "daily"], "description": "Optional: start by itself when ZAP starts, every N minutes, or daily at a time. Only when the user asks for it." },
+                    "every_minutes": { "type": "integer", "description": "For schedule \"interval\": minutes between runs (at least 5)" },
+                    "time": { "type": "string", "description": "For schedule \"daily\": local time as HH:MM, e.g. 08:00" },
+                    "weekdays": { "type": "array", "items": { "type": "integer" }, "description": "For schedule \"daily\": only these days, 0 = Monday … 6 = Sunday. Omit for every day." }
                 },
                 "required": ["name", "instructions", "tools"]
             }),
@@ -472,6 +668,28 @@ struct Draft<'a> {
     tools: String,
     max_steps: u32,
     instructions: &'a str,
+    schedule: &'a ZapSchedule,
+}
+
+/// Schedule from the create_zap arguments.
+fn schedule_from(args: &serde_json::Value) -> ZapSchedule {
+    let kind = args["schedule"].as_str().unwrap_or("off").to_string();
+    let mut s = ZapSchedule {
+        kind,
+        every_min: args["every_minutes"].as_u64().map_or(60, |n| n as u32),
+        time: args["time"].as_str().unwrap_or("08:00").trim().to_string(),
+        days: args["weekdays"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_u64())
+                    .map(|d| d as u8)
+                    .collect()
+            })
+            .unwrap_or_default(),
+    };
+    clean_schedule(&mut s);
+    s
 }
 
 pub async fn run_tool(
@@ -563,6 +781,12 @@ pub async fn run_tool(
                     .map_or(DEFAULT_STEPS, |n| n as u32),
                 created_at: now,
                 updated_at: now,
+                schedule: schedule_from(args),
+                // New ZAPs work without thinking: much faster, fewer tokens.
+                thinking: false,
+                token_budget: None,
+                time_limit: None,
+                next_run: None,
             };
             if let Err(e) = validate(&mut zap) {
                 return (activity.failed("failed"), format!("Error: {e}"));
@@ -573,6 +797,7 @@ pub async fn run_tool(
                 tools: tool_names(&zap.tools),
                 max_steps: zap.max_steps,
                 instructions: &zap.instructions,
+                schedule: &zap.schedule,
             })
             .ok();
             if !confirm(state, ctx, &mut activity).await {
@@ -720,6 +945,11 @@ mod tests {
             max_steps: 20,
             created_at: 0,
             updated_at: 0,
+            schedule: ZapSchedule::default(),
+            thinking: true,
+            token_budget: None,
+            time_limit: None,
+            next_run: None,
         };
         let p = task_prompt(&zap);
         assert!(p.contains("\"Sorter\""));

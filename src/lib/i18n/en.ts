@@ -774,6 +774,15 @@ export const en = {
   ],
 
   zaps: {
+    scheduleStartup: "Starts when ZAP starts",
+    scheduleEvery: (interval: string) => `Runs every ${interval}`,
+    scheduleDaily: (time: string, days: string) => `Runs ${days} at ${time}`,
+    nextRun: (when: string) => `next: ${when}`,
+    everyDay: "daily",
+    dayNames: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    duration: (min: number) =>
+      min < 60 ? `${min} min` : min % 60 === 0 ? `${min / 60} h` : `${Math.floor(min / 60)} h ${min % 60} min`,
+    scheduled: "Scheduled",
     title: "ZAPs",
     tab: "ZAPs",
     add: "New ZAP",
@@ -812,6 +821,7 @@ export const en = {
       stopped: "Stopped",
     } as Record<string, string>,
     source: {
+      schedule: "started by its schedule",
       manual: "started by you",
       chat: "started from the chat",
     } as Record<string, string>,
@@ -821,6 +831,8 @@ export const en = {
     deleteTitle: "Delete ZAP",
     deleteBody: (name: string) => `Delete “${name}” and its run history? This can't be undone.`,
     errors: {
+      time_limit: "Stopped: the time limit was reached.",
+      token_limit: "Stopped: the token limit was reached.",
       no_tools: "This model can't use tools. Pick e.g. qwen2.5 or qwen3 for this ZAP.",
       no_model: "No model selected. Pick one in the ZAP or in the chat.",
       zap_not_found: "There's no ZAP with that name.",
@@ -844,6 +856,28 @@ export const en = {
       appsHint: "Open apps, files, folders and links",
     },
     editor: {
+      schedule: "Start by itself",
+      scheduleKinds: {
+        off: "Only by hand",
+        startup: "When ZAP starts",
+        interval: "Every …",
+        daily: "Daily",
+      } as Record<string, string>,
+      every: "Interval",
+      time: "Time",
+      days: "Days",
+      daysHint: "None selected = every day.",
+      scheduleHint: "Scheduled ZAPs need ZAP to be running. In the tray is enough (see Settings → ZAPs).",
+      thinking: "Thinking",
+      thinkingHint:
+        "Lets thinking models (e.g. Qwen 3) reason before each step. More reliable for tricky tasks, but much slower and many more tokens. Off fits most tasks.",
+      limits: "Limits",
+      tokenLimit: "Max. tokens per run",
+      timeLimit: "Max. runtime",
+      noLimit: "No limit",
+      tokens: (n: string) => `${n} tokens`,
+      noToolsModel:
+        "This model can't use tools, so the ZAP can't run commands or search. Pick e.g. qwen2.5, qwen3 or llama3.1.",
       newTitle: "New ZAP",
       editTitle: "Edit ZAP",
       name: "Name",
@@ -894,6 +928,19 @@ export const en = {
       steps: (n: number) => `up to ${n} steps`,
     },
     settings: {
+      background: "Background",
+      closeToTray: "Keep running in the tray when closed",
+      closeToTrayHint: "Closing the window hides ZAP in the notification area, so scheduled ZAPs keep working.",
+      autostart: "Start with Windows",
+      autostartHint: "ZAP starts quietly in the tray, so scheduled ZAPs run without you opening it.",
+      notifications: "Notifications",
+      notificationsHint: "A Windows notification when a ZAP finishes or waits for your OK while ZAP isn't in front.",
+      memory: "Memory",
+      idle: "Unload idle models",
+      idleHint:
+        "Frees RAM and video memory after the time. The next answer then needs a few seconds to load the model again.",
+      idleDefault: "Engine default (Ollama 5 min, LM Studio 60 min)",
+      idleAfter: (label: string) => `After ${label}`,
       intro:
         "ZAPs are small agents that do a task by themselves in the background: run PowerShell commands, open apps, research the web and work with files. Create them in the sidebar or just ask the chat.",
       permission: "Commands and apps",
@@ -911,6 +958,12 @@ export const en = {
   },
 
   monitor: {
+    loaded: "Loaded models",
+    noneLoaded: "No model is loaded.",
+    unload: "Unload",
+    unloadAll: "Unload all",
+    unloaded: "Model memory freed.",
+    unloadFailed: "Couldn't unload.",
     title: "Resources",
     close: "Close (F5)",
     groups: {

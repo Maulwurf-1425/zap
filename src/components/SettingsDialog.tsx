@@ -41,7 +41,7 @@ import { BLUEPRINT_ICONS, FALLBACK_ICON, MAX_BLUEPRINTS, defaultBlueprints } fro
 import { DEFAULT_SETTINGS, TYPOGRAPHY_KEYS, useSettings } from "../store/settings";
 import { releaseLabel, useUpdates } from "../store/updates";
 import { VoiceTab } from "./VoiceSettings";
-import { ZapsTab } from "./ZapSettings";
+import { IdleModelsField, ZapsTab } from "./ZapSettings";
 import { useDiscord } from "../store/discord";
 import { CURATED_MODELS, curatedDescription, hasOllamaModel, MODEL_NAME, useModels } from "../store/models";
 import { useProviders } from "../store/providers";
@@ -592,6 +592,10 @@ function ModelsTab() {
         <p className="text-ui font-normal text-fg-muted">{t.engines.hint}</p>
         <EngineCard kind="ollama" />
         <EngineCard kind="lmstudio" showPort />
+      </Section>
+
+      <Section title={t.zaps.settings.memory}>
+        <IdleModelsField />
       </Section>
 
       <Section title={t.models.installed}>

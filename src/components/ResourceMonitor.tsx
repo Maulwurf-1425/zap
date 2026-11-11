@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Activity, X } from "lucide-react";
-import { api, type GroupUsage, type SystemUsage } from "../lib/ipc";
+import { Activity, LoaderCircle, X } from "lucide-react";
+import { toast } from "sonner";
+import { api, modelLabel, type GroupUsage, type LoadedModel, type SystemUsage } from "../lib/ipc";
 import { formatBytes, formatTokens } from "../lib/format";
-import { t } from "../lib/i18n";
+import { engineName, t } from "../lib/i18n";
 import { useUi } from "../store/ui";
 
 const POLL_MS = 1000;
@@ -204,10 +205,89 @@ function Panel() {
         <Sparkline values={tokenHistory} />
       </div>
 
+      <LoadedModels />
+
       <p className="text-fg-subtle">
         {sys && sys.gpu === null ? `${m.noGpu} ` : ""}
         {m.hint}
       </p>
     </section>
+  );
+}
+
+/** Models the engines hold in memory, each with an unload button. */
+function LoadedModels() {
+  const [models, setModels] = useState<LoadedModel[] | null>(null);
+  // Key being unloaded ("*" = all).
+  const [busy, setBusy] = useState<string | null>(null);
+  const m = t.monitor;
+
+  useEffect(() => {
+    let alive = true;
+    let timer = 0;
+    const poll = async () => {
+      const list = await api.loadedModels().catch(() => null);
+      if (!alive) return;
+      if (list) setModels(list);
+      timer = window.setTimeout(() => void poll(), 3000);
+    };
+    void poll();
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  const unload = async (key: string | null) => {
+    setBusy(key ?? "*");
+    const ok = await api.unloadModels(key).catch(() => false);
+    toast(ok ? m.unloaded : m.unloadFailed);
+    setModels(await api.loadedModels().catch(() => models));
+    setBusy(null);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-1 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-fg-subtle">{m.loaded}</span>
+        {models && models.length > 1 && (
+          <button
+            className="btn btn-ghost h-7 px-2 text-caption"
+            disabled={busy !== null}
+            onClick={() => void unload(null)}
+          >
+            {busy === "*" && <LoaderCircle size={12} className="animate-spin" aria-hidden="true" />}
+            {m.unloadAll}
+          </button>
+        )}
+      </div>
+      {models === null ? (
+        <span className="text-fg-muted">…</span>
+      ) : models.length === 0 ? (
+        <span className="text-fg-muted">{m.noneLoaded}</span>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {models.map((model) => (
+            <li key={model.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-fg" title={model.id}>
+                {modelLabel(model.id)}
+              </span>
+              <span className="flex-none text-fg-subtle tabular-nums">
+                {engineName(model.provider)}
+                {model.vram ? ` · ${formatBytes(model.vram)} ${m.vram}` : ""}
+              </span>
+              <button
+                className="btn btn-secondary h-7 flex-none px-2.5 text-caption"
+                disabled={busy !== null}
+                onClick={() => void unload(model.id)}
+              >
+                {busy === model.id && <LoaderCircle size={12} className="animate-spin" aria-hidden="true" />}
+                {m.unload}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

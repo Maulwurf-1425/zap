@@ -16,9 +16,11 @@ mod monitor;
 mod ndjson;
 mod ollama;
 mod provider;
+mod schedule;
 mod state;
 mod system_tools;
 mod tools;
+mod tray;
 mod versions;
 mod voice;
 mod web;
@@ -35,20 +37,17 @@ fn window_flags() -> StateFlags {
     StateFlags::all().difference(StateFlags::VISIBLE)
 }
 
-fn focus_main(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
-}
-
 fn main() {
     tauri::Builder::default()
         // Must be registered first: a second launch just focuses this one.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            focus_main(app)
+            tray::show_main(app)
         }))
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![tray::HIDDEN_ARG]),
+        ))
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(window_flags())
@@ -68,17 +67,25 @@ fn main() {
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.restore_state(window_flags());
-                let _ = window.show();
+                // Started by Windows autostart: stay in the tray.
+                if !tray::started_hidden() {
+                    let _ = window.show();
+                }
             }
+            tray::init(app.handle())?;
+            let settings = db::get_settings(&app.state::<AppState>().db()).unwrap_or_default();
+            tray::sync_autostart(app.handle(), settings.autostart);
 
             tauri::async_runtime::spawn(engine::supervise(app.handle().clone()));
             zaps::init(app.handle());
+            schedule::init(app.handle());
             // With file access on, keep the file index ready (and live) from the start.
             if db::get_settings(&app.state::<AppState>().db()).is_ok_and(|s| s.file_tools_enabled) {
                 file_tools::ensure_index(app.handle());
             }
             Ok(())
         })
+        .on_window_event(tray::on_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::provider_status,
@@ -150,6 +157,8 @@ fn main() {
             commands::read_file_attachment,
             commands::answer_approval,
             monitor::system_usage,
+            monitor::loaded_models,
+            monitor::unload_models,
             zaps::zaps_list,
             zaps::zap_save,
             zaps::zap_delete,

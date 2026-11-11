@@ -329,6 +329,10 @@ struct ToolEvent<'a> {
 
 impl ToolCtx<'_> {
     pub fn emit(&self, activity: &ToolActivity) {
+        // A ZAP waiting for an OK while nobody looks: tell the user.
+        if self.in_zap && activity.status == "pending" {
+            crate::zaps::notify_waiting(self.app, self.chat_id);
+        }
         let _ = self.app.emit(
             "chat://tool",
             ToolEvent {

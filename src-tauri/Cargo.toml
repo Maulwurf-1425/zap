@@ -9,7 +9,7 @@ rust-version = "1.80"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-window-state = "2"
@@ -41,6 +41,9 @@ sha2 = "0.10.9"
 zip = { version = "4.2.0", default-features = false, features = ["deflate"] }
 discord-rich-presence = "1.1.0"
 sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
 
 [profile.release]
 codegen-units = 1

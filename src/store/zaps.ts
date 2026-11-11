@@ -69,12 +69,37 @@ export function blankZap(): Zap {
     max_steps: DEFAULT_STEPS,
     created_at: 0,
     updated_at: 0,
+    schedule: { kind: "off", every_min: 60, time: "08:00", days: [] },
+    // Off by default: much faster and fewer tokens for most tasks.
+    thinking: false,
+    token_budget: null,
+    time_limit: null,
   };
 }
 
 /** Running run of a ZAP, if any. */
 export function liveRunOf(live: Record<string, LiveRun>, zapId: string): LiveRun | undefined {
   return Object.values(live).find((l) => l.run.zap_id === zapId);
+}
+
+/** "Runs daily at 08:00", "Runs every 2 h", … or null when off. */
+export function scheduleText(zap: Pick<Zap, "schedule">): string | null {
+  const s = zap.schedule;
+  switch (s.kind) {
+    case "startup":
+      return t.zaps.scheduleStartup;
+    case "interval":
+      return t.zaps.scheduleEvery(t.zaps.duration(s.every_min));
+    case "daily": {
+      const days =
+        s.days.length === 0 || s.days.length === 7
+          ? t.zaps.everyDay
+          : s.days.map((d) => t.zaps.dayNames[d] ?? "").join(", ");
+      return t.zaps.scheduleDaily(s.time, days);
+    }
+    default:
+      return null;
+  }
 }
 
 export function zapErrorText(code: string | null): string {
@@ -165,8 +190,11 @@ export const useZaps = create<ZapsState>((set, get) => {
       flush();
       set({ live: withoutKey(get().live, run.id) });
       void loadTotals(run.zap_id);
+      // The next scheduled start moved on.
+      void get().reload();
       const zap = get().zaps.find((z) => z.id === run.zap_id);
-      if (zap && run.status !== "stopped") {
+      // Stopped by hand needs no toast; stopped by a limit does.
+      if (zap && (run.status !== "stopped" || run.error)) {
         const text = run.status === "done" ? t.zaps.finished(zap.name) : t.zaps.failedToast(zap.name);
         toast(
           text,

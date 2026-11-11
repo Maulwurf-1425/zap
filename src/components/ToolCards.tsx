@@ -26,10 +26,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api, type ApprovalDecision, type ToolActivity } from "../lib/ipc";
+import { api, type ApprovalDecision, type ToolActivity, type ZapSchedule } from "../lib/ipc";
 import { openExternal } from "../lib/format";
 import { t } from "../lib/i18n";
-import { useZaps } from "../store/zaps";
+import { scheduleText, useZaps } from "../store/zaps";
 
 /** Where the cards live: a chat reply or a ZAP run (changes "allow all"). */
 export type ToolScope = "chat" | "run";
@@ -452,6 +452,7 @@ interface ZapDraft {
   tools: string;
   max_steps: number;
   instructions: string;
+  schedule?: ZapSchedule;
 }
 
 function parseDraft(raw: string | undefined): ZapDraft | null {
@@ -508,6 +509,9 @@ function ZapConfirmCard({ activity: a }: { activity: ToolActivity }) {
             <div className="mt-0.5 flex flex-wrap gap-x-2 text-caption text-fg-subtle">
               <span>{tools.length > 0 ? tools.join(" · ") : t.zaps.noTools}</span>
               <span>· {c.steps(draft.max_steps)}</span>
+              {draft.schedule && scheduleText({ schedule: draft.schedule }) && (
+                <span>· {scheduleText({ schedule: draft.schedule })}</span>
+              )}
             </div>
           )}
         </div>

@@ -241,7 +241,8 @@ pub async fn chat_stream(
     {
         old.cancel();
     }
-    let options = options.unwrap_or_default();
+    let mut options = options.unwrap_or_default();
+    options.keep_alive_min = idle_minutes(&state);
     let (provider, model_name) = engine::route(&state, &model);
     let mut used: Option<ChatStats> = None;
     let mut log = RunLog::default();
@@ -312,6 +313,13 @@ pub fn stop_generation(state: State<'_, AppState>, chat_id: String) {
     }
 }
 
+/// The user's "unload models after" setting.
+fn idle_minutes(state: &AppState) -> Option<u32> {
+    db::get_settings(&state.db())
+        .ok()
+        .and_then(|s| s.model_idle_minutes)
+}
+
 fn truncate_chars(text: &str, max: usize) -> String {
     text.chars().take(max).collect()
 }
@@ -348,6 +356,7 @@ pub async fn generate_title(
     let options = ChatOptions {
         temperature: Some(0.2),
         max_tokens: Some(32),
+        keep_alive_min: idle_minutes(&state),
         ..Default::default()
     };
     let (provider, model_name) = engine::route(&state, &model);
@@ -479,10 +488,23 @@ pub async fn run_agent(
         // Streamed pieces of this turn; each is about one token.
         let mut chunks: u64 = 0;
         let mut thinking: u64 = 0;
+        // Token limit: tokens spent before this turn plus this turn's prompt.
+        let spent = used
+            .as_ref()
+            .map_or(0, |u| u.prompt_eval_count + u.eval_count)
+            + estimate_tokens(&messages);
+        let mut over_budget = false;
+        // Own token per turn, so the limit can end a turn without counting
+        // as the user's stop.
+        let turn_cancel = cancel.child_token();
         let turn = loop {
             let result = provider
-                .chat_stream(model, &messages, options, offer, cancel, |piece| {
+                .chat_stream(model, &messages, options, offer, &turn_cancel, |piece| {
                     chunks += 1;
+                    if options.token_budget.is_some_and(|b| spent + chunks >= b) {
+                        over_budget = true;
+                        turn_cancel.cancel();
+                    }
                     state.stream_pieces.fetch_add(1, Ordering::Relaxed);
                     match piece {
                         Piece::Text(content) => {
@@ -522,6 +544,9 @@ pub async fn run_agent(
                         *used = Some(tools::merge_stats(used.take(), estimate));
                     }
                     log.text.push_str(&text);
+                    if over_budget && !cancel.is_cancelled() {
+                        return Err(AppError::Other("token_limit".into()));
+                    }
                     return Err(err);
                 }
             }
@@ -544,6 +569,12 @@ pub async fn run_agent(
         log.text.push_str(&text);
         if turn.tool_calls.is_empty() || offer.is_empty() {
             break;
+        }
+        // More steps would go past the token limit.
+        if let (Some(budget), Some(u)) = (options.token_budget, used.as_ref()) {
+            if u.prompt_eval_count + u.eval_count >= budget {
+                return Err(AppError::Other("token_limit".into()));
+            }
         }
 
         // Keep text written before the tool calls apart from what follows.
@@ -1148,8 +1179,14 @@ pub fn get_settings(state: State<'_, AppState>) -> AppResult<Settings> {
 }
 
 #[tauri::command]
-pub fn set_settings(state: State<'_, AppState>, settings: Settings) -> AppResult<()> {
-    db::set_settings(&state.db(), &settings)
+pub fn set_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: Settings,
+) -> AppResult<()> {
+    db::set_settings(&state.db(), &settings)?;
+    crate::tray::sync_autostart(&app, settings.autostart);
+    Ok(())
 }
 
 #[cfg(test)]

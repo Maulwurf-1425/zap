@@ -100,6 +100,62 @@ pub fn installed() -> bool {
     find_lms().is_some() || app_installed()
 }
 
+/// Ids of the models LM Studio has in memory right now.
+pub async fn loaded_models(http: &reqwest::Client, port: u16) -> Vec<String> {
+    let Ok(resp) = http
+        .get(format!("{}/api/v0/models", base_url(port)))
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+    else {
+        return Vec::new();
+    };
+    resp.json::<ModelList>()
+        .await
+        .map(|list| {
+            list.data
+                .into_iter()
+                .filter(|m| m.state.as_deref() == Some("loaded"))
+                .map(|m| m.id)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Unloads one model (`lms unload <id>`) or all (`None`). Waits up to 20 s.
+pub async fn unload(model: Option<&str>) -> bool {
+    let Some(lms) = find_lms() else {
+        return false;
+    };
+    let mut cmd = Command::new(lms);
+    cmd.arg("unload");
+    match model {
+        Some(id) => cmd.arg(id),
+        None => cmd.arg("--all"),
+    };
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(crate::ollama::CREATE_NO_WINDOW);
+    }
+    let Ok(mut child) = cmd.spawn() else {
+        return false;
+    };
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) => tokio::time::sleep(Duration::from_millis(200)).await,
+            Err(_) => return false,
+        }
+    }
+    let _ = child.kill();
+    false
+}
+
 /// Stops LM Studio's local server (`lms server stop`) for a restart and waits
 /// up to 10 s until it no longer answers. The LM Studio app stays open.
 pub async fn stop_server(http: &reqwest::Client, port: u16) {
@@ -255,6 +311,14 @@ fn request_body(
     if let Some(n) = options.max_tokens {
         body["max_tokens"] = json!(n);
     }
+    // LM Studio's switch for reasoning models (ignored by the others).
+    if options.think == Some(false) {
+        body["reasoning_effort"] = json!("none");
+    }
+    // Idle time before LM Studio unloads a model it loaded for a request.
+    if let Some(min) = options.keep_alive_min {
+        body["ttl"] = json!(u64::from(min) * 60);
+    }
     body
 }
 
@@ -282,6 +346,9 @@ struct ModelEntry {
     /// Only in the native `/api/v0/models`: "llm" | "vlm" | "embeddings".
     #[serde(rename = "type")]
     kind: Option<String>,
+    /// Only in `/api/v0/models`: "loaded" | "not-loaded".
+    #[serde(default)]
+    state: Option<String>,
 }
 
 #[derive(Deserialize)]

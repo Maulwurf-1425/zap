@@ -50,6 +50,10 @@ export const DEFAULT_SETTINGS: Settings = {
   discord_show_model: true,
   zap_permission: "ask",
   zaps_in_chat: true,
+  close_to_tray: true,
+  autostart: false,
+  zap_notifications: true,
+  model_idle_minutes: null,
 };
 
 /** Fields the appearance tab's reset button restores. */

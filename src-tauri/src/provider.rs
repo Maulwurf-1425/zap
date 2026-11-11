@@ -194,6 +194,16 @@ pub struct ChatOptions {
     /// Upper bound for model turns; `None` uses the chat default.
     #[serde(default)]
     pub max_rounds: Option<u32>,
+    /// `Some(false)` switches a thinking model's reasoning off (faster,
+    /// fewer tokens). `None` keeps the model's default; ZAP never forces it on.
+    #[serde(default)]
+    pub think: Option<bool>,
+    /// Unload the model after this many idle minutes (`None`: engine default).
+    #[serde(default)]
+    pub keep_alive_min: Option<u32>,
+    /// Stop the reply once it used this many tokens (prompt + output).
+    #[serde(default)]
+    pub token_budget: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

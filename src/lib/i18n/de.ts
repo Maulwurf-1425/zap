@@ -779,6 +779,15 @@ export const de: Strings = {
   ],
 
   zaps: {
+    scheduleStartup: "Startet, wenn ZAP startet",
+    scheduleEvery: (interval: string) => `Läuft alle ${interval}`,
+    scheduleDaily: (time: string, days: string) => `Läuft ${days} um ${time}`,
+    nextRun: (when: string) => `nächster Start: ${when}`,
+    everyDay: "täglich",
+    dayNames: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
+    duration: (min: number) =>
+      min < 60 ? `${min} Min.` : min % 60 === 0 ? `${min / 60} Std.` : `${Math.floor(min / 60)} Std. ${min % 60} Min.`,
+    scheduled: "Geplant",
     title: "ZAPs",
     tab: "ZAPs",
     add: "Neuer ZAP",
@@ -817,6 +826,7 @@ export const de: Strings = {
       stopped: "Gestoppt",
     },
     source: {
+      schedule: "nach Zeitplan gestartet",
       manual: "von dir gestartet",
       chat: "aus dem Chat gestartet",
     },
@@ -826,6 +836,8 @@ export const de: Strings = {
     deleteTitle: "ZAP löschen",
     deleteBody: (name: string) => `„${name}“ und seinen Verlauf löschen? Das lässt sich nicht rückgängig machen.`,
     errors: {
+      time_limit: "Gestoppt: Das Zeitlimit wurde erreicht.",
+      token_limit: "Gestoppt: Das Token-Limit wurde erreicht.",
       no_tools: "Dieses Modell kann keine Tools nutzen. Wähl für diesen ZAP z. B. qwen2.5 oder qwen3.",
       no_model: "Kein Modell gewählt. Wähl eins im ZAP oder im Chat.",
       zap_not_found: "Es gibt keinen ZAP mit diesem Namen.",
@@ -849,6 +861,28 @@ export const de: Strings = {
       appsHint: "Apps, Dateien, Ordner und Links öffnen",
     },
     editor: {
+      schedule: "Selbst starten",
+      scheduleKinds: {
+        off: "Nur von Hand",
+        startup: "Wenn ZAP startet",
+        interval: "Alle …",
+        daily: "Täglich",
+      },
+      every: "Abstand",
+      time: "Uhrzeit",
+      days: "Tage",
+      daysHint: "Keiner ausgewählt = jeden Tag.",
+      scheduleHint: "Geplante ZAPs brauchen ein laufendes ZAP. Im Infobereich reicht (siehe Einstellungen → ZAPs).",
+      thinking: "Nachdenken",
+      thinkingHint:
+        "Lässt denkende Modelle (z. B. Qwen 3) vor jedem Schritt überlegen. Zuverlässiger bei kniffligen Aufgaben, aber deutlich langsamer und viel mehr Tokens. Für die meisten Aufgaben reicht Aus.",
+      limits: "Grenzen",
+      tokenLimit: "Max. Tokens pro Lauf",
+      timeLimit: "Max. Laufzeit",
+      noLimit: "Keine Grenze",
+      tokens: (n: string) => `${n} Tokens`,
+      noToolsModel:
+        "Dieses Modell kann keine Tools nutzen, der ZAP kann also keine Befehle ausführen oder suchen. Wähl z. B. qwen2.5, qwen3 oder llama3.1.",
       newTitle: "Neuer ZAP",
       editTitle: "ZAP bearbeiten",
       name: "Name",
@@ -899,6 +933,20 @@ export const de: Strings = {
       steps: (n: number) => `bis zu ${n} Schritte`,
     },
     settings: {
+      background: "Hintergrund",
+      closeToTray: "Beim Schließen im Infobereich weiterlaufen",
+      closeToTrayHint: "Das Schließen versteckt ZAP im Infobereich, geplante ZAPs arbeiten weiter.",
+      autostart: "Mit Windows starten",
+      autostartHint: "ZAP startet still im Infobereich, damit geplante ZAPs laufen, ohne dass du es öffnest.",
+      notifications: "Benachrichtigungen",
+      notificationsHint:
+        "Eine Windows-Benachrichtigung, wenn ein ZAP fertig ist oder auf dein OK wartet, während ZAP nicht im Vordergrund ist.",
+      memory: "Arbeitsspeicher",
+      idle: "Unbenutzte Modelle entladen",
+      idleHint:
+        "Gibt RAM und Grafikspeicher nach der Zeit frei. Die nächste Antwort braucht dann ein paar Sekunden, um das Modell neu zu laden.",
+      idleDefault: "Standard der Engine (Ollama 5 Min., LM Studio 60 Min.)",
+      idleAfter: (label: string) => `Nach ${label}`,
       intro:
         "ZAPs sind kleine Agents, die eine Aufgabe selbstständig im Hintergrund erledigen: PowerShell-Befehle ausführen, Apps öffnen, im Web recherchieren und mit Dateien arbeiten. Leg sie in der Seitenleiste an oder frag einfach den Chat.",
       permission: "Befehle und Apps",
@@ -917,6 +965,12 @@ export const de: Strings = {
   },
 
   monitor: {
+    loaded: "Geladene Modelle",
+    noneLoaded: "Kein Modell geladen.",
+    unload: "Entladen",
+    unloadAll: "Alle entladen",
+    unloaded: "Modellspeicher freigegeben.",
+    unloadFailed: "Entladen hat nicht geklappt.",
     title: "Ressourcen",
     close: "Schließen (F5)",
     groups: {

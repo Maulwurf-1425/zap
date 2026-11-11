@@ -157,6 +157,11 @@ const MIGRATIONS: &[&str] = &[
      CREATE INDEX zap_runs_by_zap ON zap_runs(zap_id, started_at);",
     // 11: model a ZAP run used (for the run log)
     "ALTER TABLE zap_runs ADD COLUMN model TEXT;",
+    // 12: ZAP schedules, thinking switch and run limits
+    "ALTER TABLE zaps ADD COLUMN schedule TEXT;
+     ALTER TABLE zaps ADD COLUMN thinking INTEGER NOT NULL DEFAULT 1;
+     ALTER TABLE zaps ADD COLUMN token_budget INTEGER;
+     ALTER TABLE zaps ADD COLUMN time_limit INTEGER;",
 ];
 
 pub fn schema_version(conn: &Connection) -> AppResult<i64> {
@@ -329,6 +334,14 @@ pub struct Settings {
     pub zap_permission: String,
     /// The chat AI may list, create, start, stop and delete ZAPs.
     pub zaps_in_chat: bool,
+    /// Closing the window keeps ZAP running in the tray (for scheduled ZAPs).
+    pub close_to_tray: bool,
+    /// Start ZAP (hidden, in the tray) when Windows starts.
+    pub autostart: bool,
+    /// Windows notifications when a ZAP finishes or waits for an OK.
+    pub zap_notifications: bool,
+    /// Unload models after this many idle minutes; `None` = engine default.
+    pub model_idle_minutes: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -386,6 +399,10 @@ impl Default for Settings {
             discord_show_model: true,
             zap_permission: "ask".into(),
             zaps_in_chat: true,
+            close_to_tray: true,
+            autostart: false,
+            zap_notifications: true,
+            model_idle_minutes: None,
         }
     }
 }
@@ -928,6 +945,24 @@ pub struct ZapTools {
     pub apps: bool,
 }
 
+/// When a ZAP starts by itself.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct ZapSchedule {
+    /// "off" | "startup" | "interval" | "daily"
+    pub kind: String,
+    /// "interval": minutes between runs.
+    pub every_min: u32,
+    /// "daily": local time "HH:MM".
+    pub time: String,
+    /// "daily": weekdays (0 = Monday … 6 = Sunday); empty = every day.
+    pub days: Vec<u8>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Zap {
     pub id: String,
@@ -942,6 +977,20 @@ pub struct Zap {
     pub max_steps: u32,
     pub created_at: i64,
     pub updated_at: i64,
+    #[serde(default)]
+    pub schedule: ZapSchedule,
+    /// Let thinking models reason (slower, more tokens). Off = faster.
+    #[serde(default = "default_true")]
+    pub thinking: bool,
+    /// Stop a run after this many tokens (prompt + output).
+    #[serde(default)]
+    pub token_budget: Option<u64>,
+    /// Stop a run after this many minutes.
+    #[serde(default)]
+    pub time_limit: Option<u32>,
+    /// Next scheduled start (Unix ms), filled in when listing; never stored.
+    #[serde(default, skip_deserializing)]
+    pub next_run: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -968,7 +1017,7 @@ pub struct ZapRun {
 }
 
 const ZAP_COLUMNS: &str =
-    "id, name, icon, color, instructions, model, tools, max_steps, created_at, updated_at";
+    "id, name, icon, color, instructions, model, tools, max_steps, created_at, updated_at, schedule, thinking, token_budget, time_limit";
 
 fn row_to_zap(r: &rusqlite::Row<'_>) -> rusqlite::Result<Zap> {
     let tools: String = r.get(6)?;
@@ -983,6 +1032,14 @@ fn row_to_zap(r: &rusqlite::Row<'_>) -> rusqlite::Result<Zap> {
         max_steps: r.get(7)?,
         created_at: r.get(8)?,
         updated_at: r.get(9)?,
+        schedule: r
+            .get::<_, Option<String>>(10)?
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default(),
+        thinking: r.get(11)?,
+        token_budget: r.get(12)?,
+        time_limit: r.get(13)?,
+        next_run: None,
     })
 }
 
@@ -1009,12 +1066,15 @@ pub fn get_zap(conn: &Connection, id: &str) -> AppResult<Option<Zap>> {
 /// Inserts or replaces a ZAP (by id).
 pub fn save_zap(conn: &Connection, zap: &Zap) -> AppResult<()> {
     conn.execute(
-        "INSERT INTO zaps (id, name, icon, color, instructions, model, tools, max_steps, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        "INSERT INTO zaps (id, name, icon, color, instructions, model, tools, max_steps, created_at, updated_at,
+                           schedule, thinking, token_budget, time_limit)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
          ON CONFLICT(id) DO UPDATE SET
              name = excluded.name, icon = excluded.icon, color = excluded.color,
              instructions = excluded.instructions, model = excluded.model, tools = excluded.tools,
-             max_steps = excluded.max_steps, updated_at = excluded.updated_at",
+             max_steps = excluded.max_steps, updated_at = excluded.updated_at,
+             schedule = excluded.schedule, thinking = excluded.thinking,
+             token_budget = excluded.token_budget, time_limit = excluded.time_limit",
         params![
             zap.id,
             zap.name.trim(),
@@ -1026,6 +1086,10 @@ pub fn save_zap(conn: &Connection, zap: &Zap) -> AppResult<()> {
             zap.max_steps,
             zap.created_at,
             zap.updated_at,
+            serde_json::to_string(&zap.schedule).ok(),
+            zap.thinking,
+            zap.token_budget,
+            zap.time_limit,
         ],
     )?;
     Ok(())
@@ -1119,6 +1183,26 @@ pub fn zap_totals(conn: &Connection, zap_id: &str) -> AppResult<ZapTotals> {
             })
         },
     )?)
+}
+
+/// Start time of the ZAP's latest scheduled run.
+pub fn last_scheduled_run(conn: &Connection, zap_id: &str) -> AppResult<Option<i64>> {
+    Ok(conn.query_row(
+        "SELECT MAX(started_at) FROM zap_runs WHERE zap_id = ?1 AND source = 'schedule'",
+        [zap_id],
+        |r| r.get(0),
+    )?)
+}
+
+/// Model of the most recently used chat (fallback for scheduled ZAPs).
+pub fn last_chat_model(conn: &Connection) -> AppResult<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT model FROM chats WHERE model IS NOT NULL AND model != '' ORDER BY updated_at DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?)
 }
 
 /// Runs still in progress, oldest first.
@@ -1454,6 +1538,16 @@ mod tests {
             max_steps: 15,
             created_at: 1,
             updated_at: 1,
+            schedule: ZapSchedule {
+                kind: "daily".into(),
+                time: "08:00".into(),
+                days: vec![0, 4],
+                ..Default::default()
+            },
+            thinking: false,
+            token_budget: Some(20_000),
+            time_limit: Some(10),
+            next_run: None,
         };
         save_zap(&conn, &zap).unwrap();
         zap.instructions = "Sortiere Downloads nach Typ.".into();
@@ -1463,6 +1557,12 @@ mod tests {
         assert_eq!(loaded.name, "Downloads aufräumen");
         assert_eq!(loaded.instructions, "Sortiere Downloads nach Typ.");
         assert!(loaded.tools.terminal && loaded.tools.files && !loaded.tools.web);
+        assert_eq!(loaded.schedule.days, vec![0, 4]);
+        assert!(!loaded.thinking);
+        assert_eq!(
+            (loaded.token_budget, loaded.time_limit),
+            (Some(20_000), Some(10))
+        );
 
         let mut run = ZapRun {
             id: "r1".into(),

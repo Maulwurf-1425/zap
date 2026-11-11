@@ -262,6 +262,14 @@ export interface Settings {
   zap_permission: "ask" | "full";
   /** Let the chat model list, create, start, stop and delete ZAPs. */
   zaps_in_chat: boolean;
+  /** Closing the window keeps ZAP running in the tray. */
+  close_to_tray: boolean;
+  /** Start ZAP hidden in the tray when Windows starts. */
+  autostart: boolean;
+  /** Windows notifications when a ZAP finishes or waits for an OK. */
+  zap_notifications: boolean;
+  /** Unload models after this many idle minutes; null = engine default. */
+  model_idle_minutes: number | null;
 }
 
 /** Tool families a ZAP may use. */
@@ -272,6 +280,19 @@ export interface ZapTools {
   terminal: boolean;
   /** Open apps, files and links. */
   apps: boolean;
+}
+
+export type ZapScheduleKind = "off" | "startup" | "interval" | "daily";
+
+/** When a ZAP starts by itself (see src-tauri/src/schedule.rs). */
+export interface ZapSchedule {
+  kind: ZapScheduleKind;
+  /** "interval": minutes between runs. */
+  every_min: number;
+  /** "daily": local time "HH:MM". */
+  time: string;
+  /** "daily": 0 = Monday … 6 = Sunday; empty = every day. */
+  days: number[];
 }
 
 /** A small agent that works on a task by itself (see src-tauri/src/zaps.rs). */
@@ -290,6 +311,15 @@ export interface Zap {
   max_steps: number;
   created_at: number;
   updated_at: number;
+  schedule: ZapSchedule;
+  /** Let thinking models reason (slower, more tokens). */
+  thinking: boolean;
+  /** Stop a run after this many tokens; null = no limit. */
+  token_budget: number | null;
+  /** Stop a run after this many minutes; null = no limit. */
+  time_limit: number | null;
+  /** Next scheduled start (Unix ms), from the backend. */
+  next_run?: number | null;
 }
 
 export type ZapRunStatus = "running" | "done" | "failed" | "stopped";
@@ -298,7 +328,7 @@ export interface ZapRun {
   id: string;
   zap_id: string;
   input: string | null;
-  source: "manual" | "chat";
+  source: "manual" | "chat" | "schedule";
   status: ZapRunStatus;
   /** Everything the ZAP wrote (its report). */
   output: string;
@@ -345,6 +375,14 @@ export interface SystemUsage {
     session_prompt: number;
     session_output: number;
   };
+}
+
+/** A model an engine holds in memory. */
+export interface LoadedModel {
+  id: string;
+  provider: ProviderKind;
+  size: number | null;
+  vram: number | null;
 }
 
 /** Lifetime numbers of a ZAP (finished runs). */
@@ -594,6 +632,8 @@ export const api = {
   answerApproval: (id: string, decision: ApprovalDecision) => invoke<void>("answer_approval", { id, decision }),
 
   systemUsage: () => invoke<SystemUsage>("system_usage"),
+  loadedModels: () => invoke<LoadedModel[]>("loaded_models"),
+  unloadModels: (model: string | null) => invoke<boolean>("unload_models", { model }),
   zapsList: () => invoke<Zap[]>("zaps_list"),
   zapSave: (zap: Zap) => invoke<Zap>("zap_save", { zap }),
   zapDelete: (id: string) => invoke<void>("zap_delete", { id }),

@@ -13,11 +13,13 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 
 use crate::docker::{docker, SEARXNG_CONTAINER};
 use crate::error::AppResult;
+use crate::provider::{model_key, parse_model_key, ProviderKind, ProviderStatus};
 use crate::state::{lock, AppState};
+use crate::{lmstudio, ollama};
 
 /// Docker is slow to ask (1–2 s), so its numbers are refreshed in the
 /// background at most this often.
@@ -299,6 +301,69 @@ fn sample(state: &AppState) -> Usage {
             session_output: state.session_output.load(Ordering::Relaxed),
         },
     }
+}
+
+/// A model an engine holds in memory.
+#[derive(Debug, Clone, Serialize)]
+pub struct LoadedModel {
+    /// Model key (as everywhere else in ZAP).
+    pub id: String,
+    pub provider: ProviderKind,
+    /// Bytes in memory and of those in video memory; `None` when unknown.
+    pub size: Option<u64>,
+    pub vram: Option<u64>,
+}
+
+async fn loaded(state: &AppState) -> Vec<LoadedModel> {
+    let mut out = Vec::new();
+    if state.status(ProviderKind::Ollama) == ProviderStatus::Running {
+        for m in ollama::loaded_models(&state.http).await {
+            out.push(LoadedModel {
+                id: model_key(ProviderKind::Ollama, &m.name),
+                provider: ProviderKind::Ollama,
+                size: Some(m.size),
+                vram: Some(m.size_vram),
+            });
+        }
+    }
+    if state.status(ProviderKind::Lmstudio) == ProviderStatus::Running {
+        let port = crate::db::get_settings(&state.db())
+            .map_or(lmstudio::DEFAULT_PORT, |s| s.lmstudio_port);
+        for id in lmstudio::loaded_models(&state.http, port).await {
+            out.push(LoadedModel {
+                id: model_key(ProviderKind::Lmstudio, &id),
+                provider: ProviderKind::Lmstudio,
+                size: None,
+                vram: None,
+            });
+        }
+    }
+    out
+}
+
+/// Models the engines hold in memory right now.
+#[tauri::command]
+pub async fn loaded_models(state: State<'_, AppState>) -> AppResult<Vec<LoadedModel>> {
+    Ok(loaded(&state).await)
+}
+
+/// Frees memory: one model (by key) or every loaded model of both engines.
+#[tauri::command]
+pub async fn unload_models(state: State<'_, AppState>, model: Option<String>) -> AppResult<bool> {
+    let targets: Vec<LoadedModel> = loaded(&state)
+        .await
+        .into_iter()
+        .filter(|m| model.as_ref().map_or(true, |k| *k == m.id))
+        .collect();
+    let mut ok = true;
+    for m in targets {
+        let (_, name) = parse_model_key(&m.id);
+        ok &= match m.provider {
+            ProviderKind::Ollama => ollama::unload(&state.http, name).await,
+            ProviderKind::Lmstudio => lmstudio::unload(Some(name)).await,
+        };
+    }
+    Ok(ok)
 }
 
 /// One sample for the F5 overlay (call about once per second; the first

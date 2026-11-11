@@ -30,6 +30,54 @@ pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 // Process management
 // ---------------------------------------------------------------------------
 
+/// A model Ollama has in memory (`/api/ps`).
+pub struct Loaded {
+    pub name: String,
+    pub size: u64,
+    pub size_vram: u64,
+}
+
+pub async fn loaded_models(http: &reqwest::Client) -> Vec<Loaded> {
+    #[derive(Deserialize)]
+    struct Ps {
+        #[serde(default)]
+        models: Vec<PsModel>,
+    }
+    #[derive(Deserialize)]
+    struct PsModel {
+        name: String,
+        #[serde(default)]
+        size: u64,
+        #[serde(default)]
+        size_vram: u64,
+    }
+    let Ok(resp) = http.get(format!("{BASE_URL}/api/ps")).send().await else {
+        return Vec::new();
+    };
+    resp.json::<Ps>()
+        .await
+        .map(|ps| {
+            ps.models
+                .into_iter()
+                .map(|m| Loaded {
+                    name: m.name,
+                    size: m.size,
+                    size_vram: m.size_vram,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Frees a model's memory right away (`keep_alive: 0`).
+pub async fn unload(http: &reqwest::Client, name: &str) -> bool {
+    http.post(format!("{BASE_URL}/api/generate"))
+        .json(&json!({ "model": name, "keep_alive": 0 }))
+        .send()
+        .await
+        .is_ok_and(|r| r.status().is_success())
+}
+
 pub async fn version(http: &reqwest::Client) -> Option<String> {
     #[derive(Deserialize)]
     struct V {
@@ -165,6 +213,18 @@ async fn error_from_response(resp: reqwest::Response) -> AppError {
             AppError::ModelNotFound(String::new())
         }
         Err(_) => AppError::Provider(status.to_string()),
+    }
+}
+
+/// Top-level request fields besides `options`: thinking switch and idle time.
+fn add_request_flags(body: &mut Value, options: &ChatOptions) {
+    // `think: false` is accepted by every model; `true` fails on models
+    // without thinking, so it is never sent.
+    if options.think == Some(false) {
+        body["think"] = json!(false);
+    }
+    if let Some(min) = options.keep_alive_min {
+        body["keep_alive"] = json!(format!("{min}m"));
     }
 }
 
@@ -349,6 +409,7 @@ impl ChatProvider for Ollama<'_> {
         if !tools.is_empty() {
             body["tools"] = tools_json(tools);
         }
+        add_request_flags(&mut body, options);
         let mut tool_calls: Vec<ToolCall> = Vec::new();
 
         let send = self
@@ -420,12 +481,13 @@ impl ChatProvider for Ollama<'_> {
         struct Resp {
             message: Option<ChatLineMessage>,
         }
-        let body = json!({
+        let mut body = json!({
             "model": model,
             "messages": messages_json(messages),
             "stream": false,
             "options": options_json(options),
         });
+        add_request_flags(&mut body, options);
         let resp = self
             .http
             .post(format!("{BASE_URL}/api/chat"))

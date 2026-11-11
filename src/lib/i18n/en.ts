@@ -138,6 +138,8 @@ export const en = {
   },
 
   models: {
+    vramShort: (needed: string, free: string) =>
+      `Needs about ${needed} of video memory, but only ${free} is free. It will run partly on the CPU and be much slower.`,
     noModel: "No model loaded yet. Pick one to get started.",
     choose: "Choose model",
     none: "No model",
@@ -876,6 +878,8 @@ export const en = {
       timeLimit: "Max. runtime",
       noLimit: "No limit",
       tokens: (n: string) => `${n} tokens`,
+      weakToolsModel:
+        "This model isn't trained for tool calls. LM Studio lets it try anyway, but steps often go wrong. Better: a model with tool support (e.g. qwen2.5, qwen3, llama3.1).",
       noToolsModel:
         "This model can't use tools, so the ZAP can't run commands or search. Pick e.g. qwen2.5, qwen3 or llama3.1.",
       newTitle: "New ZAP",

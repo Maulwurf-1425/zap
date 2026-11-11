@@ -55,6 +55,8 @@ pub struct SystemUsage {
     pub memory_total: u64,
     pub gpu: Option<f32>,
     pub vram_used: Option<u64>,
+    /// Dedicated video memory of the biggest GPU; `None` when unknown.
+    pub vram_total: Option<u64>,
     pub cores: u32,
 }
 
@@ -291,6 +293,7 @@ fn sample(state: &AppState) -> Usage {
             memory_total: m.sys.total_memory(),
             gpu: gpu.as_ref().map(|s| s.total_load),
             vram_used: gpu.as_ref().map(|s| s.total_vram),
+            vram_total: gpu::total_vram(),
             cores,
         },
         tokens: TokenUsage {
@@ -366,6 +369,27 @@ pub async fn unload_models(state: State<'_, AppState>, model: Option<String>) ->
     Ok(ok)
 }
 
+/// Video memory of the GPU: total and in use (for "does this model fit?").
+#[derive(Debug, Clone, Serialize)]
+pub struct GpuMemory {
+    pub total: Option<u64>,
+    pub used: Option<u64>,
+}
+
+#[tauri::command]
+pub async fn gpu_memory() -> AppResult<GpuMemory> {
+    tokio::task::spawn_blocking(|| {
+        let mut m = lock(monitor());
+        let used = m.gpu.as_mut().map(|g| g.sample().total_vram);
+        GpuMemory {
+            total: gpu::total_vram(),
+            used,
+        }
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Other(e.to_string()))
+}
+
 /// One sample for the F5 overlay (call about once per second; the first
 /// call has no CPU/GPU history yet and reports low values).
 #[tauri::command]
@@ -389,6 +413,31 @@ mod gpu {
     };
 
     const PDH_MORE_DATA: u32 = 0x8000_07D2;
+
+    /// Dedicated memory of the biggest hardware GPU (from DXGI), cached.
+    pub fn total_vram() -> Option<u64> {
+        use std::sync::OnceLock;
+        use windows::Win32::Graphics::Dxgi::{
+            CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE,
+        };
+        static TOTAL: OnceLock<Option<u64>> = OnceLock::new();
+        *TOTAL.get_or_init(|| unsafe {
+            let factory: IDXGIFactory1 = CreateDXGIFactory1().ok()?;
+            let mut best: u64 = 0;
+            let mut i = 0;
+            while let Ok(adapter) = factory.EnumAdapters1(i) {
+                i += 1;
+                let Ok(desc) = adapter.GetDesc1() else {
+                    continue;
+                };
+                if desc.Flags & (DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0 {
+                    continue;
+                }
+                best = best.max(desc.DedicatedVideoMemory as u64);
+            }
+            (best > 0).then_some(best)
+        })
+    }
 
     pub struct Counters {
         query: PDH_HQUERY,
@@ -532,6 +581,10 @@ mod gpu {
         pub vram: HashMap<u32, u64>,
         pub total_load: f32,
         pub total_vram: u64,
+    }
+
+    pub fn total_vram() -> Option<u64> {
+        None
     }
 
     impl Counters {

@@ -83,7 +83,7 @@ export const useModels = create<ModelsState>((set, get) => ({
   ensureCaps: async (key) => {
     const known = get().caps[key];
     if (known) return known;
-    let caps: ModelCaps = { vision: false, tools: false };
+    let caps: ModelCaps = { vision: false, tools: false, native_tools: false };
     try {
       caps = await api.modelCapabilities(key);
     } catch {

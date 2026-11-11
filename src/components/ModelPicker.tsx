@@ -1,6 +1,6 @@
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Check, ChevronDown, Cpu, Download } from "lucide-react";
+import { Check, ChevronDown, Cpu, Download, TriangleAlert } from "lucide-react";
 import { CURATED_MODELS, hasOllamaModel, useModels } from "../store/models";
 import { useChats } from "../store/chats";
 import { anyRunning, useProviders } from "../store/providers";
@@ -9,6 +9,7 @@ import { formatBytes } from "../lib/format";
 import { engineName, t } from "../lib/i18n";
 import { modelLabel, PROVIDERS, type ModelInfo } from "../lib/ipc";
 import { PullRow } from "./PullRow";
+import { useVramInfo, vramShortfall, type VramInfo } from "../lib/vram";
 
 /** Model chip inside the composer (left). Opens a glass popover with the
  *  models of every running engine, downloads and popular suggestions. */
@@ -21,6 +22,7 @@ export function ModelPicker() {
   const statuses = useProviders((s) => s.statuses);
   const openSettings = useUi((s) => s.openSettings);
   const [open, setOpen] = useState(false);
+  const vram = useVramInfo(open);
 
   const running = anyRunning(statuses);
   const ollamaRunning = statuses.ollama === "running";
@@ -67,6 +69,7 @@ export function ModelPicker() {
                     key={m.id}
                     model={m}
                     selected={m.id === selected}
+                    vram={vram}
                     onPick={() => {
                       setChatModel(m.id);
                       setOpen(false);
@@ -120,13 +123,34 @@ export function ModelPicker() {
   );
 }
 
-function ModelOption({ model, selected, onPick }: { model: ModelInfo; selected: boolean; onPick: () => void }) {
+function ModelOption({
+  model,
+  selected,
+  vram,
+  onPick,
+}: {
+  model: ModelInfo;
+  selected: boolean;
+  vram: VramInfo | null;
+  onPick: () => void;
+}) {
+  const short = vramShortfall(model, vram);
+  const hint = short ? t.models.vramShort(formatBytes(short.needed), formatBytes(short.free)) : undefined;
   return (
-    <button role="option" aria-selected={selected} className="menu-item h-10 w-full text-left" onClick={onPick}>
+    <button
+      role="option"
+      aria-selected={selected}
+      className="menu-item h-10 w-full text-left"
+      onClick={onPick}
+      title={hint}
+    >
       <span className="flex w-4 flex-none justify-center">
         {selected && <Check size={16} strokeWidth={1.75} className="text-coral" aria-hidden="true" />}
       </span>
       <span className="min-w-0 flex-1 truncate">{model.name}</span>
+      {short && (
+        <TriangleAlert size={14} strokeWidth={1.75} className="flex-none text-[var(--warning)]" aria-label={hint} />
+      )}
       {model.size_bytes > 0 && (
         <span className="flex-none text-caption text-fg-muted tabular-nums">{formatBytes(model.size_bytes)}</span>
       )}

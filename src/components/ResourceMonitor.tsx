@@ -182,7 +182,9 @@ function Panel() {
           <div className="text-fg-muted tabular-nums">
             {m.cpu} {pct(sys?.cpu)} · {m.ram} {sys ? m.ofTotal(bytes(sys.memory_used), bytes(sys.memory_total)) : "–"}
             {sys?.gpu !== null && sys?.gpu !== undefined && ` · ${m.gpu} ${pct(sys.gpu)}`}
-            {sys?.vram_used !== null && sys?.vram_used !== undefined && ` · ${m.vram} ${bytes(sys.vram_used)}`}
+            {sys?.vram_used !== null &&
+              sys?.vram_used !== undefined &&
+              ` · ${m.vram} ${sys.vram_total ? m.ofTotal(bytes(sys.vram_used), bytes(sys.vram_total)) : bytes(sys.vram_used)}`}
           </div>
         </div>
         <Sparkline values={cpuHistory} max={100} />

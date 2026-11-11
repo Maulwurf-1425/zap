@@ -83,6 +83,11 @@ export function liveRunOf(live: Record<string, LiveRun>, zapId: string): LiveRun
 }
 
 /** "Runs daily at 08:00", "Runs every 2 h", … or null when off. */
+/** Whether a ZAP starts by itself (older ZAPs may have an empty kind). */
+export function isScheduled(zap: Pick<Zap, "schedule">): boolean {
+  return ["startup", "interval", "daily"].includes(zap.schedule.kind);
+}
+
 export function scheduleText(zap: Pick<Zap, "schedule">): string | null {
   const s = zap.schedule;
   switch (s.kind) {
@@ -226,6 +231,7 @@ export const useZaps = create<ZapsState>((set, get) => {
         events.onThinking(({ chat_id, tokens }) => onThinking(chat_id, tokens)),
         events.onZapRun(onRun),
         events.onZapsChanged(() => void get().reload()),
+        events.onZapFocus((zapId) => get().open(zapId)),
       ]);
       await get().reload();
       const active = await api.zapActiveRuns().catch(() => []);

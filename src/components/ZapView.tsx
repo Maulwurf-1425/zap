@@ -33,9 +33,19 @@ import {
 import { engineName, locale, t } from "../lib/i18n";
 import { formatBytes, formatTokens } from "../lib/format";
 import { parseTools } from "../store/chats";
+import { useVramInfo, vramShortfall } from "../lib/vram";
 import { useModels } from "../store/models";
 import { useUi } from "../store/ui";
-import { MAX_STEPS, liveRunOf, liveTokens, scheduleText, useZaps, zapErrorText, type LiveRun } from "../store/zaps";
+import {
+  MAX_STEPS,
+  isScheduled,
+  liveRunOf,
+  liveTokens,
+  scheduleText,
+  useZaps,
+  zapErrorText,
+  type LiveRun,
+} from "../store/zaps";
 
 /** ZAP colors: the same mid tones as chat groups. */
 const ZAP_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899"];
@@ -410,7 +420,10 @@ export function ZapEditor() {
 }
 
 function EditorForm({ initial, onClose }: { initial: Zap; onClose: () => void }) {
-  const [zap, setZap] = useState<Zap>(initial);
+  // Older ZAPs may have no schedule kind yet: show them as "only by hand".
+  const [zap, setZap] = useState<Zap>(() =>
+    isScheduled(initial) ? initial : { ...initial, schedule: { ...initial.schedule, kind: "off" } },
+  );
   const [busy, setBusy] = useState(false);
   const installed = useModels((s) => s.installed);
   const e = t.zaps.editor;
@@ -424,19 +437,28 @@ function EditorForm({ initial, onClose }: { initial: Zap; onClose: () => void })
   const usesTools = TOOL_KEYS.some((k) => zap.tools[k]);
   // Warn before saving a ZAP whose model can't call tools.
   const [toolsOk, setToolsOk] = useState<Record<string, boolean>>({});
+  const [nativeTools, setNativeTools] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!effectiveModel || effectiveModel in toolsOk) return;
     let alive = true;
     void useModels
       .getState()
       .ensureCaps(effectiveModel)
-      .then((caps) => alive && setToolsOk((m) => ({ ...m, [effectiveModel]: caps.tools })))
+      .then((caps) => {
+        if (!alive) return;
+        setToolsOk((m) => ({ ...m, [effectiveModel]: caps.tools }));
+        setNativeTools((m) => ({ ...m, [effectiveModel]: caps.native_tools }));
+      })
       .catch(() => undefined);
     return () => {
       alive = false;
     };
   }, [effectiveModel, toolsOk]);
   const noTools = usesTools && effectiveModel !== null && toolsOk[effectiveModel] === false;
+  const weakTools = usesTools && effectiveModel !== null && nativeTools[effectiveModel] === false;
+  const vram = useVramInfo();
+  const modelInfo = installed.find((m) => m.id === effectiveModel);
+  const short = modelInfo ? vramShortfall(modelInfo, vram) : null;
   const schedule = zap.schedule;
   // Functional updates: quick clicks must build on each other.
   const setSchedule = (p: Partial<ZapSchedule>) => setZap((z) => ({ ...z, schedule: { ...z.schedule, ...p } }));
@@ -539,6 +561,18 @@ function EditorForm({ initial, onClose }: { initial: Zap; onClose: () => void })
           <p className="-mt-3 flex items-start gap-2 text-caption text-danger">
             <TriangleAlert size={14} strokeWidth={1.75} className="mt-0.5 flex-none" aria-hidden="true" />
             {e.noToolsModel}
+          </p>
+        )}
+        {weakTools && !noTools && (
+          <p className="-mt-3 flex items-start gap-2 text-caption text-[var(--warning)]">
+            <TriangleAlert size={14} strokeWidth={1.75} className="mt-0.5 flex-none" aria-hidden="true" />
+            {e.weakToolsModel}
+          </p>
+        )}
+        {short && (
+          <p className="-mt-3 flex items-start gap-2 text-caption text-[var(--warning)]">
+            <TriangleAlert size={14} strokeWidth={1.75} className="mt-0.5 flex-none" aria-hidden="true" />
+            {t.models.vramShort(formatBytes(short.needed), formatBytes(short.free))}
           </p>
         )}
 

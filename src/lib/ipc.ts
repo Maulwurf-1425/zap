@@ -163,6 +163,8 @@ export interface ModelCaps {
   vision: boolean;
   /** Can call tools (needed for web search). */
   tools: boolean;
+  /** Trained for tool calls (LM Studio lets others try, often unreliably). */
+  native_tools: boolean;
 }
 
 export interface SearchHit {
@@ -366,6 +368,8 @@ export interface SystemUsage {
     memory_total: number;
     gpu: number | null;
     vram_used: number | null;
+    /** Dedicated video memory of the GPU. */
+    vram_total: number | null;
     cores: number;
   };
   tokens: {
@@ -633,6 +637,7 @@ export const api = {
 
   systemUsage: () => invoke<SystemUsage>("system_usage"),
   loadedModels: () => invoke<LoadedModel[]>("loaded_models"),
+  gpuMemory: () => invoke<{ total: number | null; used: number | null }>("gpu_memory"),
   unloadModels: (model: string | null) => invoke<boolean>("unload_models", { model }),
   zapsList: () => invoke<Zap[]>("zaps_list"),
   zapSave: (zap: Zap) => invoke<Zap>("zap_save", { zap }),
@@ -676,4 +681,6 @@ export const events = {
     listen<{ chat_id: string; tokens: number }>("chat://thinking", (e) => cb(e.payload)),
   onZapRun: (cb: (run: ZapRun) => void): Promise<UnlistenFn> => listen<ZapRun>("zap://run", (e) => cb(e.payload)),
   onZapsChanged: (cb: () => void): Promise<UnlistenFn> => listen("zap://changed", () => cb()),
+  /** ZAP was opened after a notification about this ZAP. */
+  onZapFocus: (cb: (zapId: string) => void): Promise<UnlistenFn> => listen<string>("zap://focus", (e) => cb(e.payload)),
 };

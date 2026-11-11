@@ -158,6 +158,7 @@ fn main() {
             commands::answer_approval,
             monitor::system_usage,
             monitor::loaded_models,
+            monitor::gpu_memory,
             monitor::unload_models,
             zaps::zaps_list,
             zaps::zap_save,

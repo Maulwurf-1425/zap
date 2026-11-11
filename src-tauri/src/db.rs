@@ -946,7 +946,7 @@ pub struct ZapTools {
 }
 
 /// When a ZAP starts by itself.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct ZapSchedule {
     /// "off" | "startup" | "interval" | "daily"
@@ -957,6 +957,17 @@ pub struct ZapSchedule {
     pub time: String,
     /// "daily": weekdays (0 = Monday … 6 = Sunday); empty = every day.
     pub days: Vec<u8>,
+}
+
+impl Default for ZapSchedule {
+    fn default() -> Self {
+        Self {
+            kind: "off".into(),
+            every_min: 60,
+            time: "08:00".into(),
+            days: Vec::new(),
+        }
+    }
 }
 
 fn default_true() -> bool {

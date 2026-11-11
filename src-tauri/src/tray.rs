@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::NotificationExt;
 
@@ -28,6 +28,10 @@ pub fn show_main(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+    }
+    // Opened after a notification (click, tray or a new launch): show that ZAP.
+    if let Some(zap_id) = crate::zaps::take_notified() {
+        let _ = app.emit("zap://focus", zap_id);
     }
 }
 
@@ -78,8 +82,15 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Closing the window: hide it into the tray when the setting is on.
+/// Window focus and closing: closing hides it into the tray when the setting is on.
 pub fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
+    // Back in front after a notification (taskbar, Alt+Tab): show that ZAP.
+    if let WindowEvent::Focused(true) = event {
+        if let Some(zap_id) = crate::zaps::take_notified() {
+            let _ = window.app_handle().emit("zap://focus", zap_id);
+        }
+        return;
+    }
     let WindowEvent::CloseRequested { api, .. } = event else {
         return;
     };

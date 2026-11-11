@@ -104,7 +104,7 @@ fn running(state: &AppState, zap_id: &str) -> bool {
 fn start(app: &AppHandle, zap: &Zap, model: &str) {
     let state = app.state::<AppState>();
     if let Err(err) = zaps::start(app, &state, &zap.id, None, "schedule", Some(model)) {
-        zaps::notify_failed_start(app, &zap.name, &err.to_string());
+        zaps::notify_failed_start(app, zap, &err.to_string());
     }
 }
 
@@ -121,7 +121,7 @@ pub fn init(app: &AppHandle) {
             .collect();
         for zap in startup {
             let Some(model) = model_for(&state, &zap) else {
-                zaps::notify_failed_start(&app, &zap.name, "no_model");
+                zaps::notify_failed_start(&app, &zap, "no_model");
                 continue;
             };
             let waited = tokio::time::Instant::now();
@@ -153,7 +153,7 @@ pub fn init(app: &AppHandle) {
                     }
                     Some(model) => start(&app, zap, &model),
                     None => {
-                        zaps::notify_failed_start(&app, &zap.name, "no_model");
+                        zaps::notify_failed_start(&app, zap, "no_model");
                         // Don't repeat the notice every 30 s: count it as a run attempt.
                         zaps::record_skipped(&state, &zap.id, "no_model");
                     }

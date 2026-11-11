@@ -88,43 +88,52 @@ fn german(state: &AppState) -> bool {
     db::get_settings(&state.db()).is_ok_and(|s| s.language == "de")
 }
 
-/// A Windows notification, when enabled and ZAP is not in front.
-fn notify(app: &AppHandle, title: &str, body: &str) {
+/// ZAP of the latest notification: opening the window shows it.
+static NOTIFIED: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// The ZAP a notification pointed to, once (see `tray::show_main`).
+pub fn take_notified() -> Option<String> {
+    lock(&NOTIFIED).take()
+}
+
+/// A Windows notification about a ZAP, when enabled and ZAP is not in front.
+fn notify(app: &AppHandle, zap_id: &str, title: &str, body: &str) {
     use tauri_plugin_notification::NotificationExt;
     let state = app.state::<AppState>();
     let enabled = db::get_settings(&state.db()).is_ok_and(|s| s.zap_notifications);
     if !enabled || window_in_focus(app) {
         return;
     }
+    *lock(&NOTIFIED) = Some(zap_id.to_string());
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
-fn zap_name_of_run(state: &AppState, run_id: &str) -> Option<String> {
+fn zap_of_run(state: &AppState, run_id: &str) -> Option<Zap> {
     let run = db::active_runs(&state.db())
         .ok()?
         .into_iter()
         .find(|r| r.id == run_id)?;
-    db::get_zap(&state.db(), &run.zap_id)
-        .ok()
-        .flatten()
-        .map(|z| z.name)
+    db::get_zap(&state.db(), &run.zap_id).ok().flatten()
 }
 
 /// A ZAP run waits for the user's OK (called for every pending approval).
 pub fn notify_waiting(app: &AppHandle, run_id: &str) {
     let state = app.state::<AppState>();
-    let Some(name) = zap_name_of_run(&state, run_id) else {
+    let Some(zap) = zap_of_run(&state, run_id) else {
         return;
     };
+    let name = &zap.name;
     if german(&state) {
         notify(
             app,
+            &zap.id,
             &format!("ZAP „{name}“ wartet auf dein OK"),
             "Öffne ZAP, um den Schritt zu erlauben oder abzulehnen.",
         );
     } else {
         notify(
             app,
+            &zap.id,
             &format!("ZAP “{name}” is waiting for your OK"),
             "Open ZAP to allow or deny the step.",
         );
@@ -132,7 +141,8 @@ pub fn notify_waiting(app: &AppHandle, run_id: &str) {
 }
 
 /// A scheduled start didn't work (no model, engine missing, …).
-pub fn notify_failed_start(app: &AppHandle, name: &str, reason: &str) {
+pub fn notify_failed_start(app: &AppHandle, zap: &Zap, reason: &str) {
+    let name = &zap.name;
     let state = app.state::<AppState>();
     let de = german(&state);
     let why = match (reason, de) {
@@ -148,7 +158,7 @@ pub fn notify_failed_start(app: &AppHandle, name: &str, reason: &str) {
     } else {
         format!("ZAP “{name}” couldn't start")
     };
-    notify(app, &title, why);
+    notify(app, &zap.id, &title, why);
 }
 
 /// Stores a scheduled start that couldn't run, so the schedule moves on and
@@ -202,7 +212,7 @@ fn notify_finished(app: &AppHandle, zap: &Zap, run: &ZapRun) {
     } else {
         "See the ZAP's run history for details.".to_string()
     };
-    notify(app, &title, &body);
+    notify(app, &zap.id, &title, &body);
 }
 
 /// The system prompt of a run.

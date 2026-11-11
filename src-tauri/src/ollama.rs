@@ -513,9 +513,11 @@ impl ChatProvider for Ollama<'_> {
             return Err(error_from_response(resp).await);
         }
         let body: Value = resp.json().await?;
+        let tools = tools_from_show(&body);
         Ok(ModelCaps {
             vision: vision_from_show(&body),
-            tools: tools_from_show(&body),
+            tools,
+            native_tools: tools,
         })
     }
 }

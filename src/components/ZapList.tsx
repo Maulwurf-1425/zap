@@ -2,7 +2,7 @@ import { CalendarClock, Plus } from "lucide-react";
 import { IconButton } from "./ui/IconButton";
 import { ZapBadge } from "./ZapView";
 import { t } from "../lib/i18n";
-import { blankZap, scheduleText, useZaps } from "../store/zaps";
+import { blankZap, isScheduled, scheduleText, useZaps } from "../store/zaps";
 
 /** Sidebar section: the user's ZAPs, with a pulse on running ones. */
 export function ZapList({ onNavigate }: { onNavigate: () => void }) {
@@ -58,7 +58,7 @@ export function ZapList({ onNavigate }: { onNavigate: () => void }) {
                 >
                   <ZapBadge zap={zap} size={22} />
                   <span className="min-w-0 flex-1 truncate">{zap.name}</span>
-                  {!busy && zap.schedule.kind !== "off" && (
+                  {!busy && isScheduled(zap) && (
                     <span title={scheduleText(zap) ?? undefined} className="flex flex-none text-fg-subtle">
                       <CalendarClock size={13} strokeWidth={1.75} aria-label={t.zaps.scheduled} />
                     </span>

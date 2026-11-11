@@ -100,6 +100,38 @@ pub fn installed() -> bool {
     find_lms().is_some() || app_installed()
 }
 
+/// File size per model key from `lms ls --json` (the server API has no
+/// sizes). Empty when `lms` is missing or slow.
+async fn model_sizes() -> std::collections::HashMap<String, u64> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Local {
+        model_key: String,
+        #[serde(default)]
+        size_bytes: u64,
+    }
+    let Some(lms) = find_lms() else {
+        return Default::default();
+    };
+    let mut cmd = tokio::process::Command::new(lms);
+    cmd.args(["ls", "--json"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    cmd.creation_flags(crate::ollama::CREATE_NO_WINDOW);
+    let Ok(Ok(out)) = tokio::time::timeout(Duration::from_secs(5), cmd.output()).await else {
+        return Default::default();
+    };
+    serde_json::from_slice::<Vec<Local>>(&out.stdout)
+        .map(|list| {
+            list.into_iter()
+                .map(|m| (m.model_key, m.size_bytes))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Ids of the models LM Studio has in memory right now.
 pub async fn loaded_models(http: &reqwest::Client, port: u16) -> Vec<String> {
     let Ok(resp) = http
@@ -349,6 +381,9 @@ struct ModelEntry {
     /// Only in `/api/v0/models`: "loaded" | "not-loaded".
     #[serde(default)]
     state: Option<String>,
+    /// Only in `/api/v0/models`, e.g. ["tool_use"].
+    #[serde(default)]
+    capabilities: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -440,14 +475,15 @@ impl ChatProvider for LmStudio<'_> {
             Ok(entries) => entries,
             Err(_) => self.fetch_models("/v1/models").await?,
         };
+        let sizes = model_sizes().await;
         let mut models: Vec<ModelInfo> = entries
             .into_iter()
             .filter(|m| !is_embedding(&m.id, m.kind.as_deref()))
             .map(|m| ModelInfo {
                 id: model_key(ProviderKind::Lmstudio, &m.id),
+                size_bytes: sizes.get(&m.id).copied().unwrap_or(0),
                 name: m.id,
                 provider: ProviderKind::Lmstudio,
-                size_bytes: 0,
                 modified_at: None,
             })
             .collect();
@@ -623,19 +659,24 @@ impl ChatProvider for LmStudio<'_> {
     /// Vision models have type "vlm" in the native model list. Older LM
     /// Studio versions without that endpoint report no image support.
     async fn capabilities(&self, model: &str) -> AppResult<ModelCaps> {
-        let vision = self
+        let entry = self
             .fetch_models("/api/v0/models")
             .await
-            .map(|entries| {
-                entries
-                    .iter()
-                    .any(|m| m.id == model && m.kind.as_deref() == Some("vlm"))
-            })
-            .unwrap_or(false);
+            .ok()
+            .and_then(|entries| entries.into_iter().find(|m| m.id == model));
+        let vision = entry
+            .as_ref()
+            .is_some_and(|m| m.kind.as_deref() == Some("vlm"));
+        // Older LM Studio versions don't list capabilities: assume yes.
+        let native_tools = entry
+            .as_ref()
+            .and_then(|m| m.capabilities.as_ref())
+            .map_or(true, |c| c.iter().any(|c| c == "tool_use"));
         // LM Studio adds tool use to any model via its prompt template.
         Ok(ModelCaps {
             vision,
             tools: true,
+            native_tools,
         })
     }
 }

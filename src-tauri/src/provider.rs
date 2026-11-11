@@ -155,6 +155,9 @@ pub struct ModelCaps {
     pub vision: bool,
     /// Can call tools (function calling).
     pub tools: bool,
+    /// Trained for tool calls. LM Studio also lets other models call tools
+    /// through its default prompt format, but they often get it wrong.
+    pub native_tools: bool,
 }
 
 /// Splits a data URL into (mime, base64 payload). Plain base64 is passed

@@ -10,6 +10,8 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { Onboarding } from "./components/Onboarding";
 import { CommandPalette } from "./components/CommandPalette";
+import { ZapEditor, ZapView } from "./components/ZapView";
+import { ResourceMonitor } from "./components/ResourceMonitor";
 import { useChats } from "./store/chats";
 import { sameModel, useModels } from "./store/models";
 import { useProviders } from "./store/providers";
@@ -18,6 +20,7 @@ import { isOverlayOpen, useUi } from "./store/ui";
 import { useUpdates } from "./store/updates";
 import { useVoice } from "./store/voice";
 import { useDiscord } from "./store/discord";
+import { useZaps } from "./store/zaps";
 import { watchSystemTheme } from "./lib/theme";
 
 const COLLAPSE_BELOW = 1000;
@@ -43,6 +46,7 @@ export default function App() {
   const setDrawerOpen = useUi((s) => s.setDrawerOpen);
   const narrow = useNarrow();
   const chatView = useRef<ChatViewHandle>(null);
+  const zapOpen = useZaps((s) => s.openId !== null);
 
   // Boot once (guarded so StrictMode can't register listeners twice).
   useEffect(() => {
@@ -50,7 +54,12 @@ export default function App() {
     booted = true;
     void (async () => {
       await useSettings.getState().load();
-      await Promise.all([useProviders.getState().init(), useModels.getState().init(), useChats.getState().init()]);
+      await Promise.all([
+        useProviders.getState().init(),
+        useModels.getState().init(),
+        useChats.getState().init(),
+        useZaps.getState().init(),
+      ]);
       void useDiscord
         .getState()
         .init()
@@ -140,16 +149,18 @@ export default function App() {
                 </>
               )}
 
-              <ChatView ref={chatView} />
+              {zapOpen ? <ZapView /> : <ChatView ref={chatView} />}
             </div>
           </div>
         </div>
 
         <SettingsDialog />
+        <ZapEditor />
         <ConfirmDialog />
         <WhatsNewDialog />
         <Onboarding />
         <CommandPalette onToggleSidebar={toggleSidebar} />
+        <ResourceMonitor />
       </Fragment>
       <Toaster
         position="bottom-center"
@@ -163,6 +174,19 @@ export default function App() {
 
 /** Global keyboard shortcuts (see lib/i18n → shortcuts). */
 function useShortcuts(toggleSidebar: () => void) {
+  // F5 anywhere (even in dialogs) opens the resource monitor instead of
+  // reloading the window.
+  useEffect(() => {
+    const onF5 = (e: KeyboardEvent) => {
+      if (e.key !== "F5") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat) useUi.getState().toggleMonitor();
+    };
+    window.addEventListener("keydown", onF5, true);
+    return () => window.removeEventListener("keydown", onF5, true);
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const ui = useUi.getState();

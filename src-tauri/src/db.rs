@@ -128,6 +128,35 @@ const MIGRATIONS: &[&str] = &[
      CREATE INDEX chats_group ON chats(group_id);",
     // 9: optional color code per group ("#rrggbb")
     "ALTER TABLE chat_groups ADD COLUMN color TEXT;",
+    // 10: ZAPs (saved agents) and their runs
+    "CREATE TABLE zaps (
+         id TEXT PRIMARY KEY,
+         name TEXT NOT NULL,
+         icon TEXT NOT NULL DEFAULT 'sparkles',
+         color TEXT,
+         instructions TEXT NOT NULL,
+         model TEXT,
+         tools TEXT NOT NULL DEFAULT '{}',
+         max_steps INTEGER NOT NULL DEFAULT 20,
+         created_at INTEGER NOT NULL,
+         updated_at INTEGER NOT NULL
+     );
+     CREATE TABLE zap_runs (
+         id TEXT PRIMARY KEY,
+         zap_id TEXT NOT NULL REFERENCES zaps(id) ON DELETE CASCADE,
+         input TEXT,
+         source TEXT NOT NULL DEFAULT 'manual',
+         status TEXT NOT NULL,
+         output TEXT NOT NULL DEFAULT '',
+         activities TEXT,
+         stats TEXT,
+         error TEXT,
+         started_at INTEGER NOT NULL,
+         ended_at INTEGER
+     );
+     CREATE INDEX zap_runs_by_zap ON zap_runs(zap_id, started_at);",
+    // 11: model a ZAP run used (for the run log)
+    "ALTER TABLE zap_runs ADD COLUMN model TEXT;",
 ];
 
 pub fn schema_version(conn: &Connection) -> AppResult<i64> {
@@ -296,6 +325,10 @@ pub struct Settings {
     pub discord_presence: bool,
     /// Include the model name in the Discord status.
     pub discord_show_model: bool,
+    /// ZAP terminal commands and app launches: "ask" (approve each) | "full".
+    pub zap_permission: String,
+    /// The chat AI may list, create, start, stop and delete ZAPs.
+    pub zaps_in_chat: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -351,6 +384,8 @@ impl Default for Settings {
             auto_read: false,
             discord_presence: false,
             discord_show_model: true,
+            zap_permission: "ask".into(),
+            zaps_in_chat: true,
         }
     }
 }
@@ -878,6 +913,246 @@ pub fn search_chats(conn: &Connection, query: &str, limit: usize) -> AppResult<V
 }
 
 // ---------------------------------------------------------------------------
+// ZAPs
+// ---------------------------------------------------------------------------
+
+/// Which tool families a ZAP may use.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct ZapTools {
+    pub web: bool,
+    pub files: bool,
+    /// PowerShell commands.
+    pub terminal: bool,
+    /// Open apps, files and links.
+    pub apps: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Zap {
+    pub id: String,
+    pub name: String,
+    pub icon: String,
+    pub color: Option<String>,
+    /// The task, in the user's words.
+    pub instructions: String,
+    /// Model key; `None` uses the model selected in the app.
+    pub model: Option<String>,
+    pub tools: ZapTools,
+    pub max_steps: u32,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ZapRun {
+    pub id: String,
+    pub zap_id: String,
+    /// Extra input for this run (e.g. from the chat).
+    pub input: Option<String>,
+    /// "manual" | "chat"
+    pub source: String,
+    /// "running" | "done" | "failed" | "stopped"
+    pub status: String,
+    /// The ZAP's final report (all text it wrote).
+    pub output: String,
+    /// Tool steps as JSON (ToolActivity list).
+    pub activities: Option<String>,
+    pub stats: Option<String>,
+    pub error: Option<String>,
+    pub started_at: i64,
+    pub ended_at: Option<i64>,
+    /// Model key the run used.
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+const ZAP_COLUMNS: &str =
+    "id, name, icon, color, instructions, model, tools, max_steps, created_at, updated_at";
+
+fn row_to_zap(r: &rusqlite::Row<'_>) -> rusqlite::Result<Zap> {
+    let tools: String = r.get(6)?;
+    Ok(Zap {
+        id: r.get(0)?,
+        name: r.get(1)?,
+        icon: r.get(2)?,
+        color: r.get(3)?,
+        instructions: r.get(4)?,
+        model: r.get(5)?,
+        tools: serde_json::from_str(&tools).unwrap_or_default(),
+        max_steps: r.get(7)?,
+        created_at: r.get(8)?,
+        updated_at: r.get(9)?,
+    })
+}
+
+pub fn list_zaps(conn: &Connection) -> AppResult<Vec<Zap>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {ZAP_COLUMNS} FROM zaps ORDER BY created_at"
+    ))?;
+    let zaps = stmt
+        .query_map([], row_to_zap)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(zaps)
+}
+
+pub fn get_zap(conn: &Connection, id: &str) -> AppResult<Option<Zap>> {
+    Ok(conn
+        .query_row(
+            &format!("SELECT {ZAP_COLUMNS} FROM zaps WHERE id = ?1"),
+            [id],
+            row_to_zap,
+        )
+        .optional()?)
+}
+
+/// Inserts or replaces a ZAP (by id).
+pub fn save_zap(conn: &Connection, zap: &Zap) -> AppResult<()> {
+    conn.execute(
+        "INSERT INTO zaps (id, name, icon, color, instructions, model, tools, max_steps, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+         ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name, icon = excluded.icon, color = excluded.color,
+             instructions = excluded.instructions, model = excluded.model, tools = excluded.tools,
+             max_steps = excluded.max_steps, updated_at = excluded.updated_at",
+        params![
+            zap.id,
+            zap.name.trim(),
+            zap.icon,
+            zap.color,
+            zap.instructions.trim(),
+            zap.model,
+            serde_json::to_string(&zap.tools).unwrap_or_else(|_| "{}".into()),
+            zap.max_steps,
+            zap.created_at,
+            zap.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn delete_zap(conn: &Connection, id: &str) -> AppResult<()> {
+    conn.execute("DELETE FROM zaps WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+const RUN_COLUMNS: &str =
+    "id, zap_id, input, source, status, output, activities, stats, error, started_at, ended_at, model";
+
+fn row_to_run(r: &rusqlite::Row<'_>) -> rusqlite::Result<ZapRun> {
+    Ok(ZapRun {
+        id: r.get(0)?,
+        zap_id: r.get(1)?,
+        input: r.get(2)?,
+        source: r.get(3)?,
+        status: r.get(4)?,
+        output: r.get(5)?,
+        activities: r.get(6)?,
+        stats: r.get(7)?,
+        error: r.get(8)?,
+        started_at: r.get(9)?,
+        ended_at: r.get(10)?,
+        model: r.get(11)?,
+    })
+}
+
+pub fn save_run(conn: &Connection, run: &ZapRun) -> AppResult<()> {
+    conn.execute(
+        "INSERT INTO zap_runs (id, zap_id, input, source, status, output, activities, stats, error, started_at, ended_at, model)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+         ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status, output = excluded.output, activities = excluded.activities,
+             stats = excluded.stats, error = excluded.error, ended_at = excluded.ended_at",
+        params![
+            run.id,
+            run.zap_id,
+            run.input,
+            run.source,
+            run.status,
+            run.output,
+            run.activities,
+            run.stats,
+            run.error,
+            run.started_at,
+            run.ended_at,
+            run.model,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Newest runs first.
+pub fn list_runs(conn: &Connection, zap_id: &str, limit: u32) -> AppResult<Vec<ZapRun>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {RUN_COLUMNS} FROM zap_runs WHERE zap_id = ?1 ORDER BY started_at DESC LIMIT ?2"
+    ))?;
+    let runs = stmt
+        .query_map(params![zap_id, limit], row_to_run)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(runs)
+}
+
+/// Lifetime numbers of one ZAP (finished runs).
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+pub struct ZapTotals {
+    pub runs: u64,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    /// Summed runtime of finished runs.
+    pub duration_ms: u64,
+}
+
+pub fn zap_totals(conn: &Connection, zap_id: &str) -> AppResult<ZapTotals> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*),
+                COALESCE(SUM(json_extract(stats, '$.prompt_eval_count')), 0),
+                COALESCE(SUM(json_extract(stats, '$.eval_count')), 0),
+                COALESCE(SUM(ended_at - started_at), 0)
+         FROM zap_runs WHERE zap_id = ?1 AND ended_at IS NOT NULL",
+        [zap_id],
+        |r| {
+            Ok(ZapTotals {
+                runs: r.get(0)?,
+                prompt_tokens: r.get(1)?,
+                completion_tokens: r.get(2)?,
+                duration_ms: r.get::<_, i64>(3)?.max(0) as u64,
+            })
+        },
+    )?)
+}
+
+/// Runs still in progress, oldest first.
+pub fn active_runs(conn: &Connection) -> AppResult<Vec<ZapRun>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {RUN_COLUMNS} FROM zap_runs WHERE status = 'running' ORDER BY started_at"
+    ))?;
+    let runs = stmt
+        .query_map([], row_to_run)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(runs)
+}
+
+#[cfg(test)]
+pub fn get_run(conn: &Connection, id: &str) -> AppResult<Option<ZapRun>> {
+    Ok(conn
+        .query_row(
+            &format!("SELECT {RUN_COLUMNS} FROM zap_runs WHERE id = ?1"),
+            [id],
+            row_to_run,
+        )
+        .optional()?)
+}
+
+/// Runs left "running" by a crash or by closing ZAP are marked as stopped.
+pub fn close_stale_runs(conn: &Connection) -> AppResult<()> {
+    conn.execute(
+        "UPDATE zap_runs SET status = 'stopped', ended_at = COALESCE(ended_at, started_at) WHERE status = 'running'",
+        [],
+    )?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Token usage
 // ---------------------------------------------------------------------------
 
@@ -898,7 +1173,7 @@ pub struct ChatUsage {
 }
 
 /// Adds one reply's tokens (from its stats JSON) to the per-model totals.
-fn record_usage(conn: &Connection, model: &str, stats: &str, at: i64) -> AppResult<()> {
+pub fn record_usage(conn: &Connection, model: &str, stats: &str, at: i64) -> AppResult<()> {
     let stats: serde_json::Value = serde_json::from_str(stats).unwrap_or_default();
     let count = |key: &str| {
         stats
@@ -1159,6 +1434,80 @@ mod tests {
 
     fn mem() -> Connection {
         open(Path::new(":memory:")).unwrap()
+    }
+
+    #[test]
+    fn zaps_and_runs() {
+        let conn = mem();
+        let mut zap = Zap {
+            id: "z1".into(),
+            name: " Downloads aufräumen ".into(),
+            icon: "folder".into(),
+            color: Some("#22c55e".into()),
+            instructions: "Sortiere Downloads.".into(),
+            model: None,
+            tools: ZapTools {
+                files: true,
+                terminal: true,
+                ..Default::default()
+            },
+            max_steps: 15,
+            created_at: 1,
+            updated_at: 1,
+        };
+        save_zap(&conn, &zap).unwrap();
+        zap.instructions = "Sortiere Downloads nach Typ.".into();
+        zap.updated_at = 2;
+        save_zap(&conn, &zap).unwrap();
+        let loaded = get_zap(&conn, "z1").unwrap().unwrap();
+        assert_eq!(loaded.name, "Downloads aufräumen");
+        assert_eq!(loaded.instructions, "Sortiere Downloads nach Typ.");
+        assert!(loaded.tools.terminal && loaded.tools.files && !loaded.tools.web);
+
+        let mut run = ZapRun {
+            id: "r1".into(),
+            zap_id: "z1".into(),
+            input: None,
+            source: "manual".into(),
+            status: "running".into(),
+            output: String::new(),
+            activities: None,
+            stats: None,
+            error: None,
+            started_at: 10,
+            ended_at: None,
+            model: Some("qwen3:8b".into()),
+        };
+        save_run(&conn, &run).unwrap();
+        run.status = "done".into();
+        run.output = "3 Dateien sortiert.".into();
+        run.ended_at = Some(20);
+        run.stats = Some(r#"{"eval_count":40,"prompt_eval_count":300,"eval_duration_ns":1,"total_duration_ns":1,"tokens_per_sec":1.0}"#.into());
+        save_run(&conn, &run).unwrap();
+        let runs = list_runs(&conn, "z1", 10).unwrap();
+        assert_eq!((runs.len(), runs[0].status.as_str()), (1, "done"));
+        assert_eq!(runs[0].model.as_deref(), Some("qwen3:8b"));
+        assert_eq!(
+            zap_totals(&conn, "z1").unwrap(),
+            ZapTotals {
+                runs: 1,
+                prompt_tokens: 300,
+                completion_tokens: 40,
+                duration_ms: 10
+            }
+        );
+
+        // A run left "running" (crash) is closed on start.
+        run.id = "r2".into();
+        run.status = "running".into();
+        run.started_at = 30;
+        save_run(&conn, &run).unwrap();
+        close_stale_runs(&conn).unwrap();
+        assert_eq!(get_run(&conn, "r2").unwrap().unwrap().status, "stopped");
+
+        // Deleting a ZAP deletes its runs.
+        delete_zap(&conn, "z1").unwrap();
+        assert!(list_runs(&conn, "z1", 10).unwrap().is_empty());
     }
 
     #[test]

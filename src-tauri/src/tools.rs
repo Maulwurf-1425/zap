@@ -13,7 +13,9 @@ use crate::error::AppError;
 use crate::file_tools;
 use crate::provider::{ChatStats, ToolCall};
 use crate::state::{lock, AppState, Decision};
+use crate::system_tools;
 use crate::web::{self, SearchConfig, SearchProvider};
+use crate::zaps;
 
 const KEYRING_SERVICE: &str = "ZAP";
 const KEYRING_BRAVE: &str = "brave-search-api-key";
@@ -52,6 +54,9 @@ impl ToolActivity {
         let input = match call.name.as_str() {
             web::TOOL_SEARCH | file_tools::SEARCH => args["query"].as_str(),
             web::TOOL_FETCH => args["url"].as_str(),
+            system_tools::RUN => args["command"].as_str(),
+            system_tools::OPEN => args["target"].as_str(),
+            n if zaps::NAMES.contains(&n) => args["zap"].as_str().or_else(|| args["name"].as_str()),
             _ => args["path"].as_str().or_else(|| args["source"].as_str()),
         };
         Self {
@@ -309,6 +314,11 @@ pub struct ToolCtx<'a> {
     pub app: &'a AppHandle,
     pub chat_id: &'a str,
     pub cancel: &'a CancellationToken,
+    /// Model key of the running reply (a ZAP started from the chat uses it
+    /// when the ZAP has no model of its own).
+    pub model: &'a str,
+    /// Running inside a ZAP (its permission setting applies).
+    pub in_zap: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -337,8 +347,13 @@ pub async fn run_any(
     call: &ToolCall,
     activity: ToolActivity,
 ) -> (ToolActivity, String) {
-    if file_tools::NAMES.contains(&call.name.as_str()) {
+    let name = call.name.as_str();
+    if file_tools::NAMES.contains(&name) {
         file_tools::run(state, ctx, call, activity).await
+    } else if system_tools::NAMES.contains(&name) {
+        system_tools::run(state, ctx, call, activity).await
+    } else if zaps::NAMES.contains(&name) {
+        zaps::run_tool(state, ctx, call, activity).await
     } else {
         run_tool(state, ctx, call, activity).await
     }

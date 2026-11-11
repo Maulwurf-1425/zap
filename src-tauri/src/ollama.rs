@@ -14,7 +14,7 @@ use crate::error::{AppError, AppResult};
 use crate::ndjson::NdjsonDecoder;
 use crate::provider::{
     model_key, split_data_url, tools_json, ChatMessage, ChatOptions, ChatProvider, ChatStats,
-    ChatTurn, ModelCaps, ModelInfo, ProviderKind, ProviderStatus, ToolCall, ToolSpec,
+    ChatTurn, ModelCaps, ModelInfo, Piece, ProviderKind, ProviderStatus, ToolCall, ToolSpec,
 };
 use crate::state::{lock, AppState};
 
@@ -218,6 +218,9 @@ struct ChatLine {
 struct ChatLineMessage {
     #[serde(default)]
     content: String,
+    /// Reasoning of thinking models (separate from the answer).
+    #[serde(default)]
+    thinking: String,
     #[serde(default)]
     tool_calls: Vec<OllamaToolCall>,
 }
@@ -335,7 +338,7 @@ impl ChatProvider for Ollama<'_> {
         mut on_token: F,
     ) -> AppResult<ChatTurn>
     where
-        F: FnMut(&str) + Send,
+        F: FnMut(Piece<'_>) + Send,
     {
         let mut body = json!({
             "model": model,
@@ -379,8 +382,11 @@ impl ChatProvider for Ollama<'_> {
                     return Err(AppError::from_provider_message(err));
                 }
                 if let Some(msg) = &line.message {
+                    if !msg.thinking.is_empty() {
+                        on_token(Piece::Thinking(&msg.thinking));
+                    }
                     if !msg.content.is_empty() {
-                        on_token(&msg.content);
+                        on_token(Piece::Text(&msg.content));
                     }
                     for call in &msg.tool_calls {
                         tool_calls.push(ToolCall {

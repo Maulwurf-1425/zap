@@ -12,14 +12,17 @@ mod file_tools;
 mod files;
 mod installer;
 mod lmstudio;
+mod monitor;
 mod ndjson;
 mod ollama;
 mod provider;
 mod state;
+mod system_tools;
 mod tools;
 mod versions;
 mod voice;
 mod web;
+mod zaps;
 
 use tauri::{Manager, RunEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
@@ -69,6 +72,7 @@ fn main() {
             }
 
             tauri::async_runtime::spawn(engine::supervise(app.handle().clone()));
+            zaps::init(app.handle());
             // With file access on, keep the file index ready (and live) from the start.
             if db::get_settings(&app.state::<AppState>().db()).is_ok_and(|s| s.file_tools_enabled) {
                 file_tools::ensure_index(app.handle());
@@ -145,6 +149,15 @@ fn main() {
             commands::rebuild_index,
             commands::read_file_attachment,
             commands::answer_approval,
+            monitor::system_usage,
+            zaps::zaps_list,
+            zaps::zap_save,
+            zaps::zap_delete,
+            zaps::zap_runs,
+            zaps::zap_totals,
+            zaps::zap_active_runs,
+            zaps::zap_start,
+            zaps::zap_stop,
             commands::get_settings,
             commands::set_settings,
         ])

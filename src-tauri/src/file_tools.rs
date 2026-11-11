@@ -408,7 +408,8 @@ fn prepare(
 
 /// Waits for the user's decision unless approval is not needed.
 async fn approve(state: &AppState, ctx: &ToolCtx<'_>, activity: &mut ToolActivity) -> bool {
-    let full = db::get_settings(&state.db()).is_ok_and(|s| s.file_permission == "full");
+    let full = db::get_settings(&state.db())
+        .is_ok_and(|s| s.file_permission == "full" || (ctx.in_zap && s.zap_permission == "full"));
     if full || lock(&state.chat_grants).contains(ctx.chat_id) {
         return true;
     }
@@ -697,7 +698,11 @@ mod tests {
                     &ChatOptions::default(),
                     &tool_specs(),
                     &CancellationToken::new(),
-                    |t| text.push_str(t),
+                    |p| {
+                        if let crate::provider::Piece::Text(t) = p {
+                            text.push_str(t);
+                        }
+                    },
                 ),
             )
             .await

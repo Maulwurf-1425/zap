@@ -49,6 +49,12 @@ pub struct AppState {
     /// The user chose the built-in search while SearXNG was down: don't ask
     /// again until ZAP restarts.
     pub searxng_fallback: AtomicBool,
+    /// Streamed pieces (text and thinking) of all replies and ZAP runs,
+    /// about one token each; the monitor derives tokens per second from it.
+    pub stream_pieces: AtomicU64,
+    /// Tokens since ZAP started, from the servers' numbers per model turn.
+    pub session_prompt: AtomicU64,
+    pub session_output: AtomicU64,
 }
 
 impl AppState {
@@ -77,6 +83,9 @@ impl AppState {
             chat_grants: Mutex::new(HashSet::new()),
             watcher: Mutex::new(None),
             searxng_fallback: AtomicBool::new(false),
+            stream_pieces: AtomicU64::new(0),
+            session_prompt: AtomicU64::new(0),
+            session_output: AtomicU64::new(0),
         }
     }
 

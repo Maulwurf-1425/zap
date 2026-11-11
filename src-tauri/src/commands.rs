@@ -16,12 +16,12 @@ use crate::error::{AppError, AppResult};
 use crate::ollama::{self, ModelDetails, PullProgress};
 use crate::provider::{
     parse_model_key, AnyProvider, ChatMessage, ChatOptions, ChatProvider, ChatStats, ModelCaps,
-    ModelInfo, ProviderKind, ProviderStatus, Statuses, ToolSpec,
+    ModelInfo, Piece, ProviderKind, ProviderStatus, Statuses, ToolSpec,
 };
 use crate::state::{lock, AppState, Decision};
 use crate::tools;
 use crate::web;
-use crate::{file_tools, files, installer, lmstudio};
+use crate::{file_tools, files, installer, lmstudio, system_tools, zaps};
 
 const SEARCH_LIMIT: usize = 50;
 const TITLE_INPUT_CHARS: usize = 1200;
@@ -197,6 +197,23 @@ struct DoneEvent<'a> {
     stopped: bool,
 }
 
+/// A thinking model is reasoning: `tokens` more pieces since the last event.
+#[derive(Clone, Serialize)]
+struct ThinkingEvent<'a> {
+    chat_id: &'a str,
+    tokens: u64,
+}
+
+/// Thinking pieces are batched into one event per this many.
+const THINKING_BATCH: u64 = 8;
+
+/// Tokens used so far in a reply or ZAP run (sent after every model turn).
+#[derive(Clone, Serialize)]
+struct UsageEvent<'a> {
+    chat_id: &'a str,
+    stats: &'a ChatStats,
+}
+
 #[derive(Clone, Serialize)]
 struct ErrorEvent<'a> {
     chat_id: &'a str,
@@ -227,8 +244,22 @@ pub async fn chat_stream(
     let options = options.unwrap_or_default();
     let (provider, model_name) = engine::route(&state, &model);
     let mut used: Option<ChatStats> = None;
+    let mut log = RunLog::default();
     let result = run_agent(
-        &app, &state, &provider, model_name, messages, &options, &token, &chat_id, &mut used,
+        &app,
+        &state,
+        &provider,
+        AgentTarget {
+            model: &model,
+            chat_id: &chat_id,
+            in_zap: false,
+        },
+        model_name,
+        messages,
+        &options,
+        &token,
+        &mut used,
+        &mut log,
     )
     .await;
 
@@ -316,10 +347,8 @@ pub async fn generate_title(
     ];
     let options = ChatOptions {
         temperature: Some(0.2),
-        num_ctx: None,
         max_tokens: Some(32),
-        web: false,
-        files: false,
+        ..Default::default()
     };
     let (provider, model_name) = engine::route(&state, &model);
     let generated = provider
@@ -363,23 +392,43 @@ pub fn merge_system(messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
 /// Upper bound for model turns in one reply (each turn may call tools).
 /// File tasks need a few steps (search, read, edit), so this is generous.
 const MAX_TOOL_ROUNDS: usize = 12;
+/// Upper bound a ZAP may ask for.
+pub const MAX_ZAP_ROUNDS: usize = 60;
+
+/// Everything the model wrote and every tool step of one run (kept for
+/// ZAP run logs; chats store their replies from the frontend).
+#[derive(Debug, Default)]
+pub struct RunLog {
+    pub text: String,
+    pub activities: Vec<tools::ToolActivity>,
+}
+
+/// Who the agent works for: a chat or a ZAP run (events use `chat_id`).
+pub struct AgentTarget<'a> {
+    /// Full model key (handed to ZAPs started from the chat).
+    pub model: &'a str,
+    pub chat_id: &'a str,
+    pub in_zap: bool,
+}
 
 /// One reply: streams the model; when it asks for tools, runs them
 /// (emitting `chat://tool`, waiting for approval where needed), feeds the
 /// results back and continues. The last round offers no tools, so the model
 /// has to answer.
 #[allow(clippy::too_many_arguments)]
-async fn run_agent(
+pub async fn run_agent(
     app: &AppHandle,
     state: &AppState,
     provider: &AnyProvider<'_>,
+    target: AgentTarget<'_>,
     model: &str,
     mut messages: Vec<ChatMessage>,
     options: &ChatOptions,
     cancel: &CancellationToken,
-    chat_id: &str,
     used: &mut Option<ChatStats>,
+    log: &mut RunLog,
 ) -> AppResult<ChatStats> {
+    let chat_id = target.chat_id;
     let mut specs: Vec<ToolSpec> = Vec::new();
     let mut prompts: Vec<String> = Vec::new();
     if options.web {
@@ -391,6 +440,19 @@ async fn run_agent(
         prompts.push(file_tools::system_prompt());
         file_tools::ensure_index(app);
     }
+    if options.terminal {
+        specs.push(system_tools::terminal_spec());
+    }
+    if options.apps {
+        specs.push(system_tools::apps_spec());
+    }
+    if options.terminal || options.apps {
+        prompts.push(system_tools::system_prompt(options.terminal, options.apps));
+    }
+    if options.zaps {
+        specs.extend(zaps::tool_specs());
+        prompts.push(zaps::chat_prompt());
+    }
     if !prompts.is_empty() {
         messages.insert(0, ChatMessage::text("system", prompts.join("\n\n")));
     }
@@ -399,27 +461,49 @@ async fn run_agent(
         app,
         chat_id,
         cancel,
+        model: target.model,
+        in_zap: target.in_zap,
     };
+    let max_rounds = options
+        .max_rounds
+        .map_or(MAX_TOOL_ROUNDS, |n| n as usize)
+        .clamp(2, MAX_ZAP_ROUNDS);
 
     // Calls already made in this reply (name + arguments): small models
     // sometimes repeat the same search or page read in a loop.
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for round in 0..MAX_TOOL_ROUNDS {
-        let offer: &[ToolSpec] = if round + 1 < MAX_TOOL_ROUNDS {
-            &specs
-        } else {
-            &[]
-        };
+    for round in 0..max_rounds {
+        let offer: &[ToolSpec] = if round + 1 < max_rounds { &specs } else { &[] };
         let mut text = String::new();
         let mut attempt = 0;
         // Streamed pieces of this turn; each is about one token.
         let mut chunks: u64 = 0;
+        let mut thinking: u64 = 0;
         let turn = loop {
             let result = provider
-                .chat_stream(model, &messages, options, offer, cancel, |content| {
-                    text.push_str(content);
+                .chat_stream(model, &messages, options, offer, cancel, |piece| {
                     chunks += 1;
-                    let _ = app.emit("chat://token", TokenEvent { chat_id, content });
+                    state.stream_pieces.fetch_add(1, Ordering::Relaxed);
+                    match piece {
+                        Piece::Text(content) => {
+                            text.push_str(content);
+                            let _ = app.emit("chat://token", TokenEvent { chat_id, content });
+                        }
+                        // Not shown, but counted live (it can take most of a turn).
+                        Piece::Thinking(_) => {
+                            thinking += 1;
+                            if thinking >= THINKING_BATCH {
+                                let _ = app.emit(
+                                    "chat://thinking",
+                                    ThinkingEvent {
+                                        chat_id,
+                                        tokens: thinking,
+                                    },
+                                );
+                                thinking = 0;
+                            }
+                        }
+                    }
                 })
                 .await;
             match result {
@@ -437,17 +521,34 @@ async fn run_agent(
                         };
                         *used = Some(tools::merge_stats(used.take(), estimate));
                     }
+                    log.text.push_str(&text);
                     return Err(err);
                 }
             }
         };
-        *used = Some(tools::merge_stats(used.take(), turn.stats));
+        state
+            .session_prompt
+            .fetch_add(turn.stats.prompt_eval_count, Ordering::Relaxed);
+        state
+            .session_output
+            .fetch_add(turn.stats.eval_count, Ordering::Relaxed);
+        let total = tools::merge_stats(used.take(), turn.stats);
+        let _ = app.emit(
+            "chat://usage",
+            UsageEvent {
+                chat_id,
+                stats: &total,
+            },
+        );
+        *used = Some(total);
+        log.text.push_str(&text);
         if turn.tool_calls.is_empty() || offer.is_empty() {
             break;
         }
 
         // Keep text written before the tool calls apart from what follows.
         if !text.trim().is_empty() {
+            log.text.push_str("\n\n");
             let _ = app.emit(
                 "chat://token",
                 TokenEvent {
@@ -483,6 +584,7 @@ Don't repeat it: use that result, or answer now."
                 r = tools::run_any(state, &ctx, call, started) => r,
             };
             ctx.emit(&activity);
+            log.activities.push(activity);
             if cancel.is_cancelled() {
                 return Err(AppError::Cancelled);
             }

@@ -122,6 +122,16 @@ pub fn tools_json(tools: &[ToolSpec]) -> serde_json::Value {
     )
 }
 
+/// One streamed piece of a model turn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Piece<'a> {
+    /// Answer text.
+    Text(&'a str),
+    /// Reasoning of a thinking model (not part of the answer, but it costs
+    /// time and tokens).
+    Thinking(&'a str),
+}
+
 /// Result of one model turn: stats plus any tool calls to run next.
 #[derive(Debug, Clone, Default)]
 pub struct ChatTurn {
@@ -172,6 +182,18 @@ pub struct ChatOptions {
     /// Offer the file tools (search, read, write, edit, delete) to the model.
     #[serde(default)]
     pub files: bool,
+    /// Offer PowerShell commands (ZAPs).
+    #[serde(default)]
+    pub terminal: bool,
+    /// Offer opening apps, files and links (ZAPs).
+    #[serde(default)]
+    pub apps: bool,
+    /// Offer the ZAP management tools (list, create, start, stop, delete).
+    #[serde(default)]
+    pub zaps: bool,
+    /// Upper bound for model turns; `None` uses the chat default.
+    #[serde(default)]
+    pub max_rounds: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -200,7 +222,7 @@ pub struct ModelInfo {
 pub trait ChatProvider {
     fn list_models(&self) -> impl Future<Output = AppResult<Vec<ModelInfo>>> + Send;
 
-    /// Streams one model turn, calling `on_token` per text chunk. Resolves
+    /// Streams one model turn, calling `on_token` per text or thinking chunk. Resolves
     /// with stats and any requested tool calls, or `AppError::Cancelled`.
     fn chat_stream<F>(
         &self,
@@ -212,7 +234,7 @@ pub trait ChatProvider {
         on_token: F,
     ) -> impl Future<Output = AppResult<ChatTurn>> + Send
     where
-        F: FnMut(&str) + Send;
+        F: FnMut(Piece<'_>) + Send;
 
     /// One-shot, non-streaming completion (used for chat titles).
     fn complete(
@@ -250,7 +272,7 @@ impl ChatProvider for AnyProvider<'_> {
         on_token: F,
     ) -> AppResult<ChatTurn>
     where
-        F: FnMut(&str) + Send,
+        F: FnMut(Piece<'_>) + Send,
     {
         match self {
             AnyProvider::Ollama(p) => {

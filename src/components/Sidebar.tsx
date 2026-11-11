@@ -28,6 +28,7 @@ import { Logo } from "./Brand";
 import { EngineStatus } from "./StatusPill";
 import { IconButton } from "./ui/IconButton";
 import { ChatListSkeleton } from "./ui/Skeleton";
+import { ZapList } from "./ZapList";
 import { useChats } from "../store/chats";
 import { SIDEBAR_MAX, SIDEBAR_MIN, useSettings } from "../store/settings";
 import { useUi } from "../store/ui";
@@ -159,6 +160,7 @@ export function Sidebar({ overlay, onNavigate, onToggle }: SidebarProps) {
 
       <ScrollArea.Root className="-mx-1 min-h-0 flex-1 overflow-hidden" type="hover">
         <ScrollArea.Viewport className="h-full w-full px-1 [&>div]:!block">
+          {!hits && <ZapList onNavigate={onNavigate} />}
           <nav aria-label={t.sidebar.label}>
             {!loaded ? (
               <ChatListSkeleton />

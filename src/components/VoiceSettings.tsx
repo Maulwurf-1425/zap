@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Check, Download, Lock, Mic, Square, Trash2, Volume2 } from "lucide-react";
 import { Section, Slider, Switch } from "./ui/Controls";
+import { Select } from "./ui/Select";
 import { IconButton } from "./ui/IconButton";
 import { VoiceDownload } from "./Voice";
 import { useSettings } from "../store/settings";
@@ -93,38 +94,31 @@ export function VoiceTab() {
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-2">
             <span className="text-ui">{v.language}</span>
-            <select
-              className="input"
+            <Select
+              label={v.language}
               value={settings.voice_language}
-              onChange={(e) => void update({ voice_language: e.target.value as Settings["voice_language"] })}
-            >
-              <option value="auto" className="bg-popover">
-                {v.auto}
-              </option>
-              <option value="de" className="bg-popover">
-                {v.german}
-              </option>
-              <option value="en" className="bg-popover">
-                {v.english}
-              </option>
-            </select>
+              onChange={(value) => void update({ voice_language: value as Settings["voice_language"] })}
+              options={[
+                { value: "auto", label: v.auto },
+                { value: "de", label: v.german },
+                { value: "en", label: v.english },
+              ]}
+            />
           </label>
           <label className="flex flex-col gap-2">
             <span className="text-ui">{v.microphone}</span>
-            <select
-              className="input"
+            <Select
+              label={v.microphone}
               value={selectedMic}
-              onChange={(e) => void update({ mic_device: e.target.value || null })}
-            >
-              <option value="" className="bg-popover">
-                {v.defaultMic}
-              </option>
-              {status?.microphones.map((mic) => (
-                <option key={mic.id} value={mic.id} className="bg-popover">
-                  {mic.is_default ? `${mic.name} · ${v.windowsDefault}` : mic.name}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => void update({ mic_device: value || null })}
+              options={[
+                { value: "", label: v.defaultMic },
+                ...(status?.microphones ?? []).map((mic) => ({
+                  value: mic.id,
+                  label: mic.is_default ? `${mic.name} · ${v.windowsDefault}` : mic.name,
+                })),
+              ]}
+            />
           </label>
         </div>
         <MicTest />

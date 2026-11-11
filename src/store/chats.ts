@@ -26,6 +26,7 @@ import { t } from "../lib/i18n";
 import { useModels } from "./models";
 import { useSettings } from "./settings";
 import { useUi } from "./ui";
+import { useZaps } from "./zaps";
 
 export interface UiMessage extends Message {
   streaming?: boolean;
@@ -387,10 +388,11 @@ export const useChats = create<ChatsState>((set, get) => {
 
     try {
       // Web tools only for models that can call tools.
-      const { web_search_enabled, file_tools_enabled } = useSettings.getState().settings;
+      const { web_search_enabled, file_tools_enabled, zaps_in_chat } = useSettings.getState().settings;
       const web = web_search_enabled && tools;
       const files = file_tools_enabled && tools;
-      await api.chatStream(chatId, model, payload, { temperature, num_ctx: context_length, web, files });
+      const zaps = zaps_in_chat && tools;
+      await api.chatStream(chatId, model, payload, { temperature, num_ctx: context_length, web, files, zaps });
     } catch (err) {
       await finish(chatId, toAppError(err).code, null, false);
     }
@@ -447,6 +449,7 @@ export const useChats = create<ChatsState>((set, get) => {
     },
 
     select: async (id) => {
+      useZaps.getState().open(null);
       set({ activeId: id });
       if (!id) return;
       const chat = get().chats.find((c) => c.id === id);
@@ -476,6 +479,7 @@ export const useChats = create<ChatsState>((set, get) => {
     },
 
     newChat: () => {
+      useZaps.getState().open(null);
       // Created lazily on the first message, so empty chats never pile up.
       set({ activeId: null });
     },

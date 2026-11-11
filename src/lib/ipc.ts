@@ -258,6 +258,106 @@ export interface Settings {
   discord_presence: boolean;
   /** Include the model name in the Discord status. */
   discord_show_model: boolean;
+  /** ZAP commands and app launches: `ask` = approve each, `full` = run freely (destructive ones still ask). */
+  zap_permission: "ask" | "full";
+  /** Let the chat model list, create, start, stop and delete ZAPs. */
+  zaps_in_chat: boolean;
+}
+
+/** Tool families a ZAP may use. */
+export interface ZapTools {
+  web: boolean;
+  files: boolean;
+  /** PowerShell commands. */
+  terminal: boolean;
+  /** Open apps, files and links. */
+  apps: boolean;
+}
+
+/** A small agent that works on a task by itself (see src-tauri/src/zaps.rs). */
+export interface Zap {
+  /** Empty for a new ZAP (the backend assigns one). */
+  id: string;
+  name: string;
+  /** Key from lib/blueprints BLUEPRINT_ICONS. */
+  icon: string;
+  /** "#rrggbb", `null` for the accent. */
+  color: string | null;
+  instructions: string;
+  /** Model key; `null` uses the model selected in the app. */
+  model: string | null;
+  tools: ZapTools;
+  max_steps: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export type ZapRunStatus = "running" | "done" | "failed" | "stopped";
+
+export interface ZapRun {
+  id: string;
+  zap_id: string;
+  input: string | null;
+  source: "manual" | "chat";
+  status: ZapRunStatus;
+  /** Everything the ZAP wrote (its report). */
+  output: string;
+  /** JSON array of ToolActivity. */
+  activities: string | null;
+  /** JSON-encoded ChatStats. */
+  stats: string | null;
+  /** Error code: an ErrorCode, or "no_tools" / "no_model". */
+  error: string | null;
+  started_at: number;
+  ended_at: number | null;
+  /** Model key the run used (null for runs before v0.5). */
+  model?: string | null;
+}
+
+export type UsageGroup = "zap" | "ollama" | "lmstudio" | "searxng";
+
+/** Resources of one part of ZAP (see src-tauri/src/monitor.rs). */
+export interface GroupUsage {
+  group: UsageGroup;
+  /** Share of the whole machine, 0–100. */
+  cpu: number;
+  memory: number;
+  /** null when the GPU counters are unavailable. */
+  gpu: number | null;
+  vram: number | null;
+  processes: number;
+}
+
+export interface SystemUsage {
+  groups: GroupUsage[];
+  system: {
+    cpu: number;
+    memory_used: number;
+    memory_total: number;
+    gpu: number | null;
+    vram_used: number | null;
+    cores: number;
+  };
+  tokens: {
+    active: number;
+    zap_runs: number;
+    per_sec: number;
+    session_prompt: number;
+    session_output: number;
+  };
+}
+
+/** Lifetime numbers of a ZAP (finished runs). */
+export interface ZapTotals {
+  runs: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  duration_ms: number;
+}
+
+export interface UsageEvent {
+  chat_id: string;
+  stats: ChatStats;
 }
 
 export interface DiscordPresence {
@@ -371,6 +471,8 @@ export interface ChatOptions {
   web?: boolean;
   /** Offer file tools (search, read, write, edit, delete). */
   files?: boolean;
+  /** Offer the ZAP management tools. */
+  zaps?: boolean;
 }
 
 export interface TokenEvent {
@@ -491,6 +593,17 @@ export const api = {
   readFileAttachment: (path: string) => invoke<FileAttachmentData>("read_file_attachment", { path }),
   answerApproval: (id: string, decision: ApprovalDecision) => invoke<void>("answer_approval", { id, decision }),
 
+  systemUsage: () => invoke<SystemUsage>("system_usage"),
+  zapsList: () => invoke<Zap[]>("zaps_list"),
+  zapSave: (zap: Zap) => invoke<Zap>("zap_save", { zap }),
+  zapDelete: (id: string) => invoke<void>("zap_delete", { id }),
+  zapRuns: (zapId: string) => invoke<ZapRun[]>("zap_runs", { zapId }),
+  zapTotals: (zapId: string) => invoke<ZapTotals>("zap_totals", { zapId }),
+  zapActiveRuns: () => invoke<ZapRun[]>("zap_active_runs"),
+  zapStart: (zapId: string, input: string | null, model: string | null) =>
+    invoke<ZapRun>("zap_start", { zapId, input, model }),
+  zapStop: (runId: string) => invoke<void>("zap_stop", { runId }),
+
   getSettings: () => invoke<Settings>("get_settings"),
   setSettings: (settings: Settings) => invoke<void>("set_settings", { settings }),
 };
@@ -516,4 +629,11 @@ export const events = {
   onTool: (cb: (e: ToolEvent) => void): Promise<UnlistenFn> => listen<ToolEvent>("chat://tool", (e) => cb(e.payload)),
   onError: (cb: (e: ErrorEvent) => void): Promise<UnlistenFn> =>
     listen<ErrorEvent>("chat://error", (e) => cb(e.payload)),
+  onUsage: (cb: (e: UsageEvent) => void): Promise<UnlistenFn> =>
+    listen<UsageEvent>("chat://usage", (e) => cb(e.payload)),
+  /** A thinking model is reasoning (`tokens` more pieces, batched). */
+  onThinking: (cb: (e: { chat_id: string; tokens: number }) => void): Promise<UnlistenFn> =>
+    listen<{ chat_id: string; tokens: number }>("chat://thinking", (e) => cb(e.payload)),
+  onZapRun: (cb: (run: ZapRun) => void): Promise<UnlistenFn> => listen<ZapRun>("zap://run", (e) => cb(e.payload)),
+  onZapsChanged: (cb: () => void): Promise<UnlistenFn> => listen("zap://changed", () => cb()),
 };

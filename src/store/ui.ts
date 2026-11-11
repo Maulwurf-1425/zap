@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useUpdates } from "./updates";
 
 export type SettingsTab =
-  "general" | "appearance" | "models" | "chat" | "voice" | "usage" | "web" | "files" | "data" | "about";
+  "general" | "appearance" | "models" | "chat" | "voice" | "zaps" | "usage" | "web" | "files" | "data" | "about";
 
 export interface ConfirmRequest {
   title: string;
@@ -21,6 +21,8 @@ interface UiState {
   drawerOpen: boolean;
   /** Screen-reader announcement for the streaming live region. */
   announcement: string;
+  /** Resource monitor overlay (F5). */
+  monitorOpen: boolean;
 
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
@@ -31,6 +33,7 @@ interface UiState {
   closeConfirm: () => void;
   setDrawerOpen: (open: boolean) => void;
   announce: (text: string) => void;
+  toggleMonitor: () => void;
 }
 
 export const useUi = create<UiState>((set) => ({
@@ -41,6 +44,7 @@ export const useUi = create<UiState>((set) => ({
   confirm: null,
   drawerOpen: false,
   announcement: "",
+  monitorOpen: false,
 
   openSettings: (tab) => set((s) => ({ settingsOpen: true, settingsTab: tab ?? s.settingsTab, paletteOpen: false })),
   closeSettings: () => set({ settingsOpen: false }),
@@ -50,6 +54,7 @@ export const useUi = create<UiState>((set) => ({
   askConfirm: (confirm) => set({ confirm }),
   closeConfirm: () => set({ confirm: null }),
   setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
+  toggleMonitor: () => set((s) => ({ monitorOpen: !s.monitorOpen })),
   // Clear first so repeating the same text is announced again.
   announce: (text) => {
     set({ announcement: "" });

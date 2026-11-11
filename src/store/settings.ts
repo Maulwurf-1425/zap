@@ -48,6 +48,8 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_read: false,
   discord_presence: false,
   discord_show_model: true,
+  zap_permission: "ask",
+  zaps_in_chat: true,
 };
 
 /** Fields the appearance tab's reset button restores. */

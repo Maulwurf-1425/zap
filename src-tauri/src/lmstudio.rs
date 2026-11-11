@@ -15,7 +15,7 @@ use crate::error::{AppError, AppResult};
 use crate::ndjson::{SseDecoder, SseEvent};
 use crate::provider::{
     model_key, tools_json, ChatMessage, ChatOptions, ChatProvider, ChatStats, ChatTurn, ModelCaps,
-    ModelInfo, ProviderKind, ProviderStatus, ToolCall, ToolSpec,
+    ModelInfo, Piece, ProviderKind, ProviderStatus, ToolCall, ToolSpec,
 };
 
 pub const DEFAULT_PORT: u16 = 1234;
@@ -301,6 +301,8 @@ struct StreamChoice {
 #[derive(Deserialize)]
 struct Delta {
     content: Option<String>,
+    /// Thinking models (LM Studio puts their reasoning here).
+    reasoning_content: Option<String>,
     tool_calls: Option<Vec<DeltaToolCall>>,
 }
 
@@ -396,7 +398,7 @@ impl ChatProvider for LmStudio<'_> {
         mut on_token: F,
     ) -> AppResult<ChatTurn>
     where
-        F: FnMut(&str) + Send,
+        F: FnMut(Piece<'_>) + Send,
     {
         let started = Instant::now();
         let send = self
@@ -481,10 +483,15 @@ impl ChatProvider for LmStudio<'_> {
                         }
                         continue;
                     };
+                    if let Some(text) = delta.reasoning_content.filter(|t| !t.is_empty()) {
+                        first_token.get_or_insert_with(Instant::now);
+                        chunks += 1;
+                        on_token(Piece::Thinking(&text));
+                    }
                     if let Some(text) = delta.content.filter(|t| !t.is_empty()) {
                         first_token.get_or_insert_with(Instant::now);
                         chunks += 1;
-                        on_token(&text);
+                        on_token(Piece::Text(&text));
                     }
                     for part in delta.tool_calls.unwrap_or_default() {
                         let idx = part.index.unwrap_or(calls.len().saturating_sub(1));
@@ -740,7 +747,11 @@ data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"
                 &ChatOptions::default(),
                 &crate::web::tool_specs(),
                 &CancellationToken::new(),
-                |t| print!("{t}"),
+                |p| {
+                    if let Piece::Text(t) = p {
+                        print!("{t}");
+                    }
+                },
             )
             .await
             .unwrap();

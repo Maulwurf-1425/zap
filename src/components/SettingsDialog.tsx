@@ -28,9 +28,11 @@ import {
   Sun,
   Trash2,
   TriangleAlert,
+  Zap,
 } from "lucide-react";
 import { Dialog } from "./ui/Dialog";
 import { Field, Section, Segmented, Slider, Switch } from "./ui/Controls";
+import { Select } from "./ui/Select";
 import { IconButton } from "./ui/IconButton";
 import { Skeleton } from "./ui/Skeleton";
 import { PullRow } from "./PullRow";
@@ -39,6 +41,7 @@ import { BLUEPRINT_ICONS, FALLBACK_ICON, MAX_BLUEPRINTS, defaultBlueprints } fro
 import { DEFAULT_SETTINGS, TYPOGRAPHY_KEYS, useSettings } from "../store/settings";
 import { releaseLabel, useUpdates } from "../store/updates";
 import { VoiceTab } from "./VoiceSettings";
+import { ZapsTab } from "./ZapSettings";
 import { useDiscord } from "../store/discord";
 import { CURATED_MODELS, curatedDescription, hasOllamaModel, MODEL_NAME, useModels } from "../store/models";
 import { useProviders } from "../store/providers";
@@ -86,6 +89,7 @@ const tabs = (): { id: SettingsTab; label: string; icon: typeof Palette }[] => [
   { id: "models", label: t.settings.tabs.models, icon: Package },
   { id: "chat", label: t.settings.tabs.chat, icon: MessageSquare },
   { id: "voice", label: t.voice.tab, icon: Mic },
+  { id: "zaps", label: t.zaps.tab, icon: Zap },
   { id: "usage", label: t.settings.tabs.usage, icon: ChartColumn },
   { id: "web", label: t.settings.tabs.web, icon: Globe },
   { id: "files", label: t.settings.tabs.files, icon: FolderSearch },
@@ -137,6 +141,9 @@ export function SettingsDialog() {
             </Tabs.Content>
             <Tabs.Content value="voice" className="outline-none">
               <VoiceTab />
+            </Tabs.Content>
+            <Tabs.Content value="zaps" className="outline-none">
+              <ZapsTab />
             </Tabs.Content>
             <Tabs.Content value="usage" className="outline-none">
               <UsageTab />
@@ -783,21 +790,15 @@ function ChatTab() {
       </div>
 
       <Field label={c.defaultModel} htmlFor="default-model">
-        <select
+        <Select
           id="default-model"
-          className="input"
           value={settings.default_model ?? ""}
-          onChange={(e) => void update({ default_model: e.target.value || null })}
-        >
-          <option value="" className="bg-popover">
-            {c.defaultModelAuto}
-          </option>
-          {installed.map((m) => (
-            <option key={m.name} value={m.name} className="bg-popover">
-              {m.name}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => void update({ default_model: value || null })}
+          options={[
+            { value: "", label: c.defaultModelAuto },
+            ...installed.map((m) => ({ value: m.name, label: m.name })),
+          ]}
+        />
       </Field>
 
       <BlueprintsSection />

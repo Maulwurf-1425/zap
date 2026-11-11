@@ -781,7 +781,11 @@ mod tests {
                         &ChatOptions::default(),
                         &tool_specs(),
                         &CancellationToken::new(),
-                        |t| text.push_str(t),
+                        |p| {
+                            if let crate::provider::Piece::Text(t) = p {
+                                text.push_str(t);
+                            }
+                        },
                     )
                     .await
                     .unwrap();

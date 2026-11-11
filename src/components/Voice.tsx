@@ -168,7 +168,7 @@ export function ReadAloudButton({ id, content }: { id: string; content: string }
     <IconButton
       label={speaking ? t.voice.stopReading : t.voice.readAloud}
       aria-pressed={speaking}
-      className={`size-8 ${speaking ? "text-coral" : ""}`}
+      className={speaking ? "text-coral" : ""}
       onClick={() => void speak(id, content)}
     >
       {speaking ? (

@@ -51,7 +51,7 @@ pub async fn is_up(http: &reqwest::Client) -> bool {
     version(http).await.is_some()
 }
 
-fn find_executable() -> Option<PathBuf> {
+pub fn find_executable() -> Option<PathBuf> {
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
         let candidate = PathBuf::from(local)
             .join("Programs")
@@ -118,6 +118,36 @@ pub async fn start(state: &AppState, on_starting: impl Fn()) -> ProviderStatus {
     }
     ProviderStatus::Stopped
 }
+
+/// Stops Ollama for a restart: ZAP's own `ollama serve`, and also an Ollama
+/// started elsewhere (tray app), so the restart really reloads it. Waits up
+/// to 10 s until it no longer answers.
+pub async fn stop(state: &AppState) {
+    if let Some(mut child) = lock(&state.child).take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    if is_up(&state.http).await {
+        for image in ["ollama app.exe", "ollama.exe"] {
+            let mut cmd = Command::new("taskkill");
+            cmd.args(["/F", "/IM", image])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+            let _ = cmd.status();
+        }
+    }
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline && is_up(&state.http).await {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

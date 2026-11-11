@@ -17,7 +17,7 @@ pub fn docker(args: &[&str]) -> std::io::Result<std::process::Output> {
     cmd.output()
 }
 
-fn desktop_exe() -> Option<PathBuf> {
+pub fn desktop_exe() -> Option<PathBuf> {
     let program_files = std::env::var_os("ProgramFiles")?;
     let exe = PathBuf::from(program_files)
         .join("Docker")
@@ -63,6 +63,62 @@ pub async fn state() -> DockerState {
     })
     .await
     .unwrap_or(DockerState::Missing)
+}
+
+/// The SearXNG container as the settings show it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContainerState {
+    /// Docker isn't installed.
+    DockerMissing,
+    /// Docker is installed but its engine isn't running.
+    DockerStopped,
+    /// Docker runs, but ZAP's SearXNG container doesn't exist (not set up).
+    Missing,
+    Stopped,
+    Running,
+}
+
+pub async fn container_state() -> ContainerState {
+    match state().await {
+        DockerState::Missing => ContainerState::DockerMissing,
+        DockerState::Stopped => ContainerState::DockerStopped,
+        DockerState::Running => tauri::async_runtime::spawn_blocking(|| {
+            match docker(&["inspect", "-f", "{{.State.Running}}", SEARXNG_CONTAINER]) {
+                Ok(out) if out.status.success() => {
+                    if String::from_utf8_lossy(&out.stdout).trim() == "true" {
+                        ContainerState::Running
+                    } else {
+                        ContainerState::Stopped
+                    }
+                }
+                _ => ContainerState::Missing,
+            }
+        })
+        .await
+        .unwrap_or(ContainerState::Missing),
+    }
+}
+
+/// Runs `docker <action> zap-searxng` ("stop" | "restart").
+pub async fn container_command(action: &'static str) -> bool {
+    tauri::async_runtime::spawn_blocking(move || {
+        docker(&[action, SEARXNG_CONTAINER]).is_ok_and(|o| o.status.success())
+    })
+    .await
+    .unwrap_or(false)
+}
+
+/// Waits up to `secs` until SearXNG answers.
+pub async fn wait_until_up(http: &reqwest::Client, url: &str, secs: u64) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(secs);
+    while Instant::now() < deadline {
+        if searxng_up(http, url).await {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    false
 }
 
 pub async fn searxng_up(http: &reqwest::Client, url: &str) -> bool {

@@ -249,8 +249,12 @@
     color: var(--fg);
   }
   .btn-secondary:not(:disabled):hover {
-    border-color: var(--border-strong);
-    background: var(--surface-3);
+    border-color: var(--btn-border-hover);
+    background: var(--btn-hover);
+  }
+  .btn-secondary:not(:disabled):active {
+    background: var(--btn-press);
+    transform: scale(0.97);
   }
 
   .btn-ghost {
@@ -260,7 +264,12 @@
     color: var(--fg);
   }
   .btn-ghost:not(:disabled):hover {
-    background: var(--surface-2);
+    background: var(--btn-hover);
+    color: var(--fg);
+  }
+  .btn-ghost:not(:disabled):active {
+    background: var(--btn-press);
+    transform: scale(0.97);
   }
 
   .btn-icon {
@@ -275,6 +284,10 @@
   .btn-icon[data-state="open"] {
     background: var(--surface-2);
     color: var(--fg);
+  }
+  .btn-icon:not(:disabled):active {
+    background: var(--surface-3);
+    transform: scale(0.92);
   }
 
   .input {
@@ -333,6 +346,9 @@
   .menu-item[data-selected="true"],
   .menu-item:hover {
     background: var(--surface-2);
+  }
+  .menu-item:active {
+    background: var(--surface-3);
   }
   .menu-item[data-disabled] {
     opacity: 0.4;
@@ -670,7 +686,7 @@
   .anim-dialog[data-state="open"] {
     animation: none;
   }
-  .btn-primary:not(:disabled):active {
+  .btn:not(:disabled):active {
     transform: none;
   }
   *,

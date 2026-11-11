@@ -59,6 +59,12 @@ pub async fn provider_start(app: AppHandle, provider: ProviderKind) -> AppResult
     Ok(engine::ensure(&app, provider).await)
 }
 
+/// Stops an engine's server and starts it again. Returns the new status.
+#[tauri::command]
+pub async fn provider_restart(app: AppHandle, provider: ProviderKind) -> AppResult<ProviderStatus> {
+    Ok(engine::restart(&app, provider).await)
+}
+
 #[derive(Serialize)]
 pub struct LinkResult {
     page: Option<web::Page>,
@@ -195,6 +201,8 @@ struct DoneEvent<'a> {
 struct ErrorEvent<'a> {
     chat_id: &'a str,
     error: &'a AppError,
+    /// Tokens used before the error (so a partial reply is still counted).
+    stats: Option<ChatStats>,
 }
 
 /// Streams a reply. Events carry the `chat_id`, so several chats can stream
@@ -218,8 +226,9 @@ pub async fn chat_stream(
     }
     let options = options.unwrap_or_default();
     let (provider, model_name) = engine::route(&state, &model);
+    let mut used: Option<ChatStats> = None;
     let result = run_agent(
-        &app, &state, &provider, model_name, messages, &options, &token, &chat_id,
+        &app, &state, &provider, model_name, messages, &options, &token, &chat_id, &mut used,
     )
     .await;
 
@@ -246,7 +255,7 @@ pub async fn chat_stream(
                 "chat://done",
                 DoneEvent {
                     chat_id: &chat_id,
-                    stats: None,
+                    stats: used,
                     stopped: true,
                 },
             );
@@ -257,6 +266,7 @@ pub async fn chat_stream(
                 ErrorEvent {
                     chat_id: &chat_id,
                     error: &err,
+                    stats: used,
                 },
             );
         }
@@ -322,6 +332,16 @@ pub async fn generate_title(
     db::apply_generated_title(&state.db(), &chat_id, &title)
 }
 
+/// Rough token count of a prompt (about 4 characters per token, plus a few
+/// tokens of framing per message). Only used when a turn was stopped and the
+/// server sent no numbers.
+pub fn estimate_tokens(messages: &[ChatMessage]) -> u64 {
+    messages
+        .iter()
+        .map(|m| (m.content.chars().count() as u64).div_ceil(4) + 4)
+        .sum()
+}
+
 /// Joins all system messages into one at the start. Several chat templates
 /// (Qwen among them) reject a second system message or one after the first.
 pub fn merge_system(messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
@@ -358,6 +378,7 @@ async fn run_agent(
     options: &ChatOptions,
     cancel: &CancellationToken,
     chat_id: &str,
+    used: &mut Option<ChatStats>,
 ) -> AppResult<ChatStats> {
     let mut specs: Vec<ToolSpec> = Vec::new();
     let mut prompts: Vec<String> = Vec::new();
@@ -380,7 +401,6 @@ async fn run_agent(
         cancel,
     };
 
-    let mut total: Option<ChatStats> = None;
     // Calls already made in this reply (name + arguments): small models
     // sometimes repeat the same search or page read in a loop.
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -392,20 +412,36 @@ async fn run_agent(
         };
         let mut text = String::new();
         let mut attempt = 0;
+        // Streamed pieces of this turn; each is about one token.
+        let mut chunks: u64 = 0;
         let turn = loop {
             let result = provider
                 .chat_stream(model, &messages, options, offer, cancel, |content| {
                     text.push_str(content);
+                    chunks += 1;
                     let _ = app.emit("chat://token", TokenEvent { chat_id, content });
                 })
                 .await;
             match result {
                 // Small models sometimes garble a tool call; one retry usually works.
                 Err(AppError::ToolFormat(_)) if attempt == 0 && text.is_empty() => attempt += 1,
-                other => break other?,
+                Ok(turn) => break turn,
+                Err(err) => {
+                    // A stopped or failed turn has no server stats, but the
+                    // model did read the prompt and write what was streamed.
+                    if matches!(err, AppError::Cancelled) || chunks > 0 {
+                        let estimate = ChatStats {
+                            eval_count: chunks,
+                            prompt_eval_count: estimate_tokens(&messages),
+                            ..Default::default()
+                        };
+                        *used = Some(tools::merge_stats(used.take(), estimate));
+                    }
+                    return Err(err);
+                }
             }
         };
-        total = Some(tools::merge_stats(total, turn.stats));
+        *used = Some(tools::merge_stats(used.take(), turn.stats));
         if turn.tool_calls.is_empty() || offer.is_empty() {
             break;
         }
@@ -459,7 +495,7 @@ Don't repeat it: use that result, or answer now."
             });
         }
     }
-    Ok(total.unwrap_or_default())
+    Ok(used.clone().unwrap_or_default())
 }
 
 // --- Files -------------------------------------------------------------------
@@ -573,6 +609,51 @@ pub async fn test_search(state: State<'_, AppState>) -> AppResult<usize> {
 
 const SEARXNG_PORT: u16 = 8888;
 const SEARXNG_IMAGE: &str = "docker.io/searxng/searxng:latest";
+
+#[tauri::command]
+pub async fn searxng_container() -> crate::docker::ContainerState {
+    crate::docker::container_state().await
+}
+
+/// Starts, stops or restarts the SearXNG container ("start" also starts
+/// Docker Desktop when needed). Returns the new state. Error codes:
+/// docker_missing, searxng_missing, docker_failed.
+#[tauri::command]
+pub async fn searxng_control(
+    state: State<'_, AppState>,
+    action: String,
+) -> AppResult<crate::docker::ContainerState> {
+    use crate::docker::{self, ContainerState};
+    let url = db::get_settings(&state.db())?.searxng_url;
+    let current = docker::container_state().await;
+    match current {
+        ContainerState::DockerMissing => return Err(AppError::Other("docker_missing".into())),
+        ContainerState::Missing => return Err(AppError::Other("searxng_missing".into())),
+        _ => {}
+    }
+    let ok = match action.as_str() {
+        "stop" => {
+            current == ContainerState::DockerStopped || docker::container_command("stop").await
+        }
+        "start" if current == ContainerState::Running => true,
+        // Starts Docker Desktop first if needed, then the container, and waits.
+        "start" => {
+            docker::start_searxng(&state.http, &url, &CancellationToken::new(), |_| {}).await
+        }
+        "restart" if current == ContainerState::Running => {
+            docker::container_command("restart").await
+                && docker::wait_until_up(&state.http, &url, 60).await
+        }
+        "restart" => {
+            docker::start_searxng(&state.http, &url, &CancellationToken::new(), |_| {}).await
+        }
+        _ => return Err(AppError::Other("unknown action".into())),
+    };
+    if !ok {
+        return Err(AppError::Other("docker_failed".into()));
+    }
+    Ok(docker::container_state().await)
+}
 
 /// Sets up SearXNG as a local Docker container (loopback only, JSON
 /// enabled), waits until it answers and switches the search provider to it.
@@ -972,6 +1053,16 @@ pub fn set_settings(state: State<'_, AppState>, settings: Settings) -> AppResult
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn estimates_prompt_tokens() {
+        let msgs = vec![
+            ChatMessage::text("system", "a".repeat(400)),
+            ChatMessage::text("user", "Hallo"),
+        ];
+        // 100 + 4 and 2 + 4
+        assert_eq!(estimate_tokens(&msgs), 110);
+    }
 
     #[test]
     fn system_messages_become_one_at_the_start() {

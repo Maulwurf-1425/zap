@@ -315,6 +315,21 @@ export interface Blueprint {
   send: boolean;
 }
 
+export type ToolName = "ollama" | "lmstudio" | "docker";
+
+export interface ToolVersion {
+  tool: ToolName;
+  /** null = not installed (or unreadable). */
+  installed: string | null;
+  /** Newest release (via winget); null if unknown. */
+  latest: string | null;
+  update_available: boolean;
+  can_open: boolean;
+}
+
+/** SearXNG container as reported by Docker. */
+export type ContainerState = "docker_missing" | "docker_stopped" | "missing" | "stopped" | "running";
+
 export interface LinkResult {
   page: { title: string; url: string; text: string } | null;
   /** Same codes as the fetch_page tool (t.web.errors). */
@@ -372,6 +387,8 @@ export interface DoneEvent {
 export interface ErrorEvent {
   chat_id: string;
   error: AppError;
+  /** Tokens used before the error, so a partial reply is still counted. */
+  stats?: ChatStats | null;
 }
 
 /** Normalizes anything thrown by `invoke` into an AppError. */
@@ -396,6 +413,10 @@ export const api = {
 
   providerStatus: () => invoke<Statuses>("provider_status"),
   providerStart: (provider: ProviderKind) => invoke<ProviderStatus>("provider_start", { provider }),
+  providerRestart: (provider: ProviderKind) => invoke<ProviderStatus>("provider_restart", { provider }),
+  toolVersions: (checkUpdates: boolean, refresh = false) =>
+    invoke<ToolVersion[]>("tool_versions", { checkUpdates, refresh }),
+  openTool: (tool: ToolName) => invoke<void>("open_tool", { tool }),
   readLink: (url: string) => invoke<LinkResult>("read_link", { url }),
   discordAvailable: () => invoke<boolean>("discord_available"),
   discordUpdate: (presence: DiscordPresence) => invoke<void>("discord_update", { presence }),
@@ -461,6 +482,8 @@ export const api = {
   setBraveKey: (key: string | null) => invoke<void>("set_brave_key", { key }),
   testSearch: () => invoke<number>("test_search"),
   searxngSetup: () => invoke<string>("searxng_setup"),
+  searxngContainer: () => invoke<ContainerState>("searxng_container"),
+  searxngControl: (action: "start" | "stop" | "restart") => invoke<ContainerState>("searxng_control", { action }),
 
   fileSearch: (query: string) => invoke<FileHit[]>("file_search", { query }),
   indexStatus: () => invoke<IndexStatus>("index_status"),

@@ -154,6 +154,29 @@ describe("chat store", () => {
     expect(useChats.getState().generating.c2).toBeUndefined();
   });
 
+  it("counts the tokens of a stopped or failed reply", async () => {
+    const used = {
+      eval_count: 12,
+      prompt_eval_count: 300,
+      eval_duration_ns: 0,
+      total_duration_ns: 0,
+      tokens_per_sec: 0,
+    };
+    await useChats.getState().send("Erzähl was");
+    handlers.token!({ chat_id: "c1", content: "Es war einmal" });
+    handlers.done!({ chat_id: "c1", stats: used, stopped: true });
+    await tick();
+    const saved = vi.mocked(api.saveMessage).mock.calls.at(-1)![0];
+    expect(saved.role).toBe("assistant");
+    expect(saved.stats).toMatchObject({ eval_count: 12, prompt_eval_count: 300 });
+
+    await useChats.getState().send("Noch was");
+    handlers.token!({ chat_id: "c1", content: "Teil" });
+    handlers.error!({ chat_id: "c1", error: { code: "provider_unreachable", message: "" }, stats: used });
+    await tick();
+    expect(vi.mocked(api.saveMessage).mock.calls.at(-1)![0].stats).toMatchObject({ eval_count: 12 });
+  });
+
   it("keeps partial output on error and drops empty replies", async () => {
     await useChats.getState().send("Frage");
     handlers.token!({ chat_id: "c1", content: "Teil" });

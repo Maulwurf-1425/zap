@@ -17,11 +17,13 @@ import {
   ArrowUp,
   ChevronDown,
   Package,
+  Play,
   Palette,
   Plus,
   RotateCcw,
   Send,
   Sparkles,
+  Square,
   SlidersHorizontal,
   Sun,
   Trash2,
@@ -56,6 +58,8 @@ import {
   type SearchStatus,
   type ThemeMode,
   type Blueprint,
+  type ContainerState,
+  type ToolVersion,
   type FontFamily,
   type Settings,
 } from "../lib/ipc";
@@ -115,37 +119,41 @@ export function SettingsDialog() {
             </Tabs.Trigger>
           ))}
         </Tabs.List>
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto rounded-lg bg-surface-1 px-6 py-5">
-          <Tabs.Content value="general" className="outline-none">
-            <GeneralTab />
-          </Tabs.Content>
-          <Tabs.Content value="appearance" className="outline-none">
-            <AppearanceTab />
-          </Tabs.Content>
-          <Tabs.Content value="models" className="outline-none">
-            <ModelsTab />
-          </Tabs.Content>
-          <Tabs.Content value="chat" className="outline-none">
-            <ChatTab />
-          </Tabs.Content>
-          <Tabs.Content value="voice" className="outline-none">
-            <VoiceTab />
-          </Tabs.Content>
-          <Tabs.Content value="usage" className="outline-none">
-            <UsageTab />
-          </Tabs.Content>
-          <Tabs.Content value="web" className="outline-none">
-            <WebTab />
-          </Tabs.Content>
-          <Tabs.Content value="files" className="outline-none">
-            <FilesTab />
-          </Tabs.Content>
-          <Tabs.Content value="data" className="outline-none">
-            <DataTab />
-          </Tabs.Content>
-          <Tabs.Content value="about" className="outline-none">
-            <AboutTab />
-          </Tabs.Content>
+        {/* The outer box clips to the rounded corners, so the scrollbar of
+            the inner one never pokes out over them. */}
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg bg-surface-1">
+          <div className="h-full overflow-y-auto px-6 py-5">
+            <Tabs.Content value="general" className="outline-none">
+              <GeneralTab />
+            </Tabs.Content>
+            <Tabs.Content value="appearance" className="outline-none">
+              <AppearanceTab />
+            </Tabs.Content>
+            <Tabs.Content value="models" className="outline-none">
+              <ModelsTab />
+            </Tabs.Content>
+            <Tabs.Content value="chat" className="outline-none">
+              <ChatTab />
+            </Tabs.Content>
+            <Tabs.Content value="voice" className="outline-none">
+              <VoiceTab />
+            </Tabs.Content>
+            <Tabs.Content value="usage" className="outline-none">
+              <UsageTab />
+            </Tabs.Content>
+            <Tabs.Content value="web" className="outline-none">
+              <WebTab />
+            </Tabs.Content>
+            <Tabs.Content value="files" className="outline-none">
+              <FilesTab />
+            </Tabs.Content>
+            <Tabs.Content value="data" className="outline-none">
+              <DataTab />
+            </Tabs.Content>
+            <Tabs.Content value="about" className="outline-none">
+              <AboutTab />
+            </Tabs.Content>
+          </div>
         </div>
       </Tabs.Root>
     </Dialog>
@@ -1320,6 +1328,91 @@ function BraveSettings({ hasKey, onChange }: { hasKey: boolean; onChange: () => 
   );
 }
 
+/** Status of the local SearXNG container with start / stop / restart. */
+function SearxngContainer({ settingUp }: { settingUp: boolean }) {
+  const [state, setState] = useState<ContainerState | null>(null);
+  const [busy, setBusy] = useState<"start" | "stop" | "restart" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const c = t.settings.webSearch.container;
+
+  // Docker can change outside ZAP; check every few seconds while visible.
+  useEffect(() => {
+    let alive = true;
+    const poll = () =>
+      void api
+        .searxngContainer()
+        .then((s) => alive && setState(s))
+        .catch(() => undefined);
+    poll();
+    const timer = window.setInterval(poll, 5000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [settingUp]);
+
+  const run = async (action: "start" | "stop" | "restart") => {
+    setBusy(action);
+    setError(null);
+    try {
+      setState(await api.searxngControl(action));
+    } catch (err) {
+      const code = toAppError(err).message;
+      setError(t.web.errors[code] ?? t.errors.generic);
+      setState(await api.searxngContainer().catch(() => null));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (state === null) return null;
+  const running = state === "running";
+  const canControl = state === "running" || state === "stopped" || state === "docker_stopped";
+  const dot = running ? "var(--success)" : canControl ? "var(--warning)" : "var(--fg-subtle)";
+
+  return (
+    <div className="flex flex-col gap-2 border-b border-border pb-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex min-w-0 flex-1 items-center gap-2 text-ui" role="status" aria-live="polite">
+          <span className={`status-dot ${busy ? "pulse" : ""}`} style={{ background: dot }} aria-hidden="true" />
+          {busy ? c.working[busy] : c.state[state]}
+        </span>
+        {canControl && (
+          <div className="flex flex-wrap gap-2">
+            {running ? (
+              <>
+                <button
+                  className="btn btn-ghost h-9 text-fg-muted"
+                  disabled={busy !== null}
+                  onClick={() => void run("restart")}
+                >
+                  <RotateCcw size={15} strokeWidth={1.75} aria-hidden="true" />
+                  {c.restart}
+                </button>
+                <button className="btn btn-secondary h-9" disabled={busy !== null} onClick={() => void run("stop")}>
+                  <Square size={13} strokeWidth={1.75} fill="currentColor" aria-hidden="true" />
+                  {c.stop}
+                </button>
+              </>
+            ) : (
+              <button className="btn btn-secondary h-9" disabled={busy !== null} onClick={() => void run("start")}>
+                <Play size={14} strokeWidth={1.75} aria-hidden="true" />
+                {c.start}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {state === "docker_stopped" && !busy && <p className="text-caption text-fg-muted">{c.dockerStoppedHint}</p>}
+      {error && (
+        <p className="text-caption text-danger" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SearxngSettings() {
   const url = useSettings((s) => s.settings.searxng_url);
   const load = useSettings((s) => s.load);
@@ -1347,6 +1440,7 @@ function SearxngSettings() {
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface-1 p-4">
+      <SearxngContainer settingUp={busy} />
       <div className="flex flex-col gap-2">
         <button className="btn btn-secondary self-start" disabled={busy} onClick={() => void setup()}>
           {busy ? w.settingUp : w.setup}
@@ -1669,32 +1763,113 @@ function UpdatesSection() {
   );
 }
 
+/** One helper app on the About page: version, and an update hint with a
+ *  button that opens the app (updates are done there). */
+function ToolVersionRow({ name, info, loading }: { name: string; info?: ToolVersion; loading: boolean }) {
+  const a = t.settings.about;
+  const open = () => {
+    if (!info) return;
+    void api.openTool(info.tool).catch(() => toast(t.errors.generic));
+  };
+  return (
+    <div className="flex flex-col justify-center gap-1 border-b border-border py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <dt className="text-ui font-normal text-fg-muted">{name}</dt>
+        <dd className="text-ui">
+          {loading ? (
+            <Skeleton className="h-4 w-16" />
+          ) : (
+            (info?.installed ?? <span className="text-fg-subtle">{a.notInstalled}</span>)
+          )}
+        </dd>
+      </div>
+      {info?.update_available && info.latest && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-surface-2 px-3 py-2">
+          <span className="text-caption">
+            <span className="text-coral">{a.updateAvailable(info.latest)}</span>
+            <span className="text-fg-muted"> · {a.updateHint(name)}</span>
+          </span>
+          {info.can_open && (
+            <button className="btn btn-secondary h-7 text-caption" onClick={open}>
+              <ExternalLink size={13} strokeWidth={1.75} aria-hidden="true" />
+              {a.openApp(name)}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AboutTab() {
   const [info, setInfo] = useState<AppInfo | null>(null);
-  const lmstudio = useProviders((s) => s.statuses.lmstudio);
+  const [tools, setTools] = useState<ToolVersion[] | null>(null);
+  // Starts true: the first check runs as soon as the tab opens.
+  const [checking, setChecking] = useState(true);
   const a = t.settings.about;
+
+  // Installed versions first (fast), then the update check via winget (slow).
+  const load = async (refresh: boolean) => {
+    try {
+      setTools(await api.toolVersions(false));
+      setTools(await api.toolVersions(true, refresh));
+    } catch {
+      // Keep what we have.
+    } finally {
+      setChecking(false);
+    }
+  };
 
   useEffect(() => {
     void api
       .appInfo()
       .then(setInfo)
       .catch(() => setInfo({ version: "–", ollama_version: null }));
+    let alive = true;
+    void api
+      .toolVersions(false)
+      .then((v) => alive && setTools(v))
+      .then(() => api.toolVersions(true))
+      .then((v) => alive && setTools(v))
+      .catch(() => undefined)
+      .finally(() => alive && setChecking(false));
+    return () => {
+      alive = false;
+    };
   }, []);
 
   return (
     <div className="flex flex-col gap-8">
       <dl className="flex flex-col">
-        {[
-          [a.version, info?.version],
-          [a.ollamaVersion, info ? (info.ollama_version ?? a.unreachable) : undefined],
-          [a.lmstudioStatus, t.engines.status[lmstudio]],
-        ].map(([label, value]) => (
-          <div key={label} className="flex h-10 items-center justify-between border-b border-border">
-            <dt className="text-ui font-normal text-fg-muted">{label}</dt>
-            <dd className="text-ui">{value ?? <Skeleton className="h-4 w-16" />}</dd>
-          </div>
+        <div className="flex h-10 items-center justify-between border-b border-border">
+          <dt className="text-ui font-normal text-fg-muted">{a.version}</dt>
+          <dd className="text-ui">{info?.version ?? <Skeleton className="h-4 w-16" />}</dd>
+        </div>
+        {(["ollama", "lmstudio", "docker"] as const).map((tool) => (
+          <ToolVersionRow
+            key={tool}
+            name={a.tools[tool]}
+            info={tools?.find((v) => v.tool === tool)}
+            loading={tools === null}
+          />
         ))}
       </dl>
+      <div className="-mt-5 flex items-center justify-between gap-3">
+        <span className="text-caption text-fg-subtle" aria-live="polite">
+          {checking ? a.checkingTools : tools?.some((v) => v.latest) ? a.toolsChecked : ""}
+        </span>
+        <button
+          className="btn btn-ghost h-8 text-caption text-fg-muted"
+          disabled={checking}
+          onClick={() => {
+            setChecking(true);
+            void load(true);
+          }}
+        >
+          <RotateCcw size={13} strokeWidth={1.75} aria-hidden="true" />
+          {a.checkTools}
+        </button>
+      </div>
       <p className="text-ui font-normal text-fg-muted">{a.privacy}</p>
       <UpdatesSection />
       <Section title={a.licenses}>

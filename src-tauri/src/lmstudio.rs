@@ -67,7 +67,7 @@ fn find_lms() -> Option<PathBuf> {
 }
 
 /// Per-user install (default) or a machine-wide one under Program Files.
-fn app_exe() -> Option<PathBuf> {
+pub fn app_exe() -> Option<PathBuf> {
     let mut roots = Vec::new();
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
         roots.push(PathBuf::from(local).join("Programs"));
@@ -98,6 +98,35 @@ pub fn launch_app() -> bool {
 
 pub fn installed() -> bool {
     find_lms().is_some() || app_installed()
+}
+
+/// Stops LM Studio's local server (`lms server stop`) for a restart and waits
+/// up to 10 s until it no longer answers. The LM Studio app stays open.
+pub async fn stop_server(http: &reqwest::Client, port: u16) {
+    if let Some(lms) = find_lms() {
+        let mut cmd = Command::new(lms);
+        cmd.args(["server", "stop"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(crate::ollama::CREATE_NO_WINDOW);
+        }
+        if let Ok(mut child) = cmd.spawn() {
+            // `lms` can hang while LM Studio is busy; don't wait on it forever.
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while Instant::now() < deadline && matches!(child.try_wait(), Ok(None)) {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+            let _ = child.kill();
+        }
+    }
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline && is_up(http, port).await {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
 }
 
 /// Uses a running LM Studio server, otherwise asks `lms server start` to

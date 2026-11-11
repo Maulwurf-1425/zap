@@ -17,6 +17,7 @@ mod ollama;
 mod provider;
 mod state;
 mod tools;
+mod versions;
 mod voice;
 mod web;
 
@@ -78,6 +79,11 @@ fn main() {
             commands::app_info,
             commands::provider_status,
             commands::provider_start,
+            commands::provider_restart,
+            versions::tool_versions,
+            versions::open_tool,
+            commands::searxng_container,
+            commands::searxng_control,
             commands::read_link,
             discord::discord_available,
             discord::discord_update,

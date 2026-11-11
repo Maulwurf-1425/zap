@@ -431,7 +431,7 @@ export const useChats = create<ChatsState>((set, get) => {
         events.onToken(({ chat_id, content }) => queueToken(chat_id, content)),
         events.onDone(({ chat_id, stats, stopped }) => void finish(chat_id, null, stats, stopped)),
         events.onTool(({ chat_id, activity }) => applyToolActivity(chat_id, activity)),
-        events.onError(({ chat_id, error }) => void finish(chat_id, error.code, null, false)),
+        events.onError(({ chat_id, error, stats }) => void finish(chat_id, error.code, stats ?? null, false)),
       ]);
       await get().reload();
     },

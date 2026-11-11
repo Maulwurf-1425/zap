@@ -108,6 +108,27 @@ pub async fn ensure(app: &AppHandle, kind: ProviderKind) -> ProviderStatus {
     status
 }
 
+/// Stops a provider's server and starts it again (e.g. when it hangs or after
+/// changing its settings outside ZAP).
+pub async fn restart(app: &AppHandle, kind: ProviderKind) -> ProviderStatus {
+    let state = app.state::<AppState>();
+    let cfg = config(&state);
+    if !cfg.enabled(kind) {
+        return ensure(app, kind).await;
+    }
+    // Keep the health check from reporting "stopped" while we restart.
+    if state.starting(kind).swap(true, Ordering::SeqCst) {
+        return state.status(kind);
+    }
+    set_status(app, kind, ProviderStatus::Starting);
+    match kind {
+        ProviderKind::Ollama => ollama::stop(&state).await,
+        ProviderKind::Lmstudio => lmstudio::stop_server(&state.http, cfg.lmstudio_port).await,
+    }
+    state.starting(kind).store(false, Ordering::SeqCst);
+    ensure(app, kind).await
+}
+
 /// Starts enabled providers, then keeps their status in sync (a server
 /// quits, the user installs or enables one while ZAP is open).
 pub async fn supervise(app: AppHandle) {

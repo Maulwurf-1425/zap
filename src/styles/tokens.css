@@ -112,6 +112,10 @@
   --surface-1: rgba(254, 253, 254, 0.05);
   --surface-2: rgba(254, 253, 254, 0.09);
   --surface-3: rgba(254, 253, 254, 0.14);
+  /* Buttons: clearly lighter on hover, a touch darker while pressed. */
+  --btn-hover: rgba(254, 253, 254, 0.22);
+  --btn-press: rgba(254, 253, 254, 0.08);
+  --btn-border-hover: rgba(254, 253, 254, 0.45);
   --border: rgba(254, 253, 254, 0.12);
   --border-strong: rgba(254, 253, 254, 0.24);
   --fg: var(--snow);
@@ -176,6 +180,9 @@
   --surface-1: rgba(11, 37, 64, 0.04);
   --surface-2: rgba(11, 37, 64, 0.07);
   --surface-3: rgba(11, 37, 64, 0.11);
+  --btn-hover: rgba(11, 37, 64, 0.1);
+  --btn-press: rgba(11, 37, 64, 0.17);
+  --btn-border-hover: rgba(11, 37, 64, 0.4);
   --border: rgba(11, 37, 64, 0.12);
   --border-strong: rgba(11, 37, 64, 0.24);
   --fg: var(--ink);

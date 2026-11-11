@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { Switch } from "./ui/Controls";
 import { useProviders } from "../store/providers";
 import { LMSTUDIO_DEFAULT_PORT, useSettings } from "../store/settings";
@@ -26,6 +27,7 @@ export function EngineCard({ kind, showPort = false }: { kind: ProviderKind; sho
   const update = useSettings((s) => s.update);
   const status = useProviders((s) => s.statuses[kind]);
   const start = useProviders((s) => s.start);
+  const restart = useProviders((s) => s.restart);
   const name = engineName(kind);
   const enabled = settings[ENABLED_KEY[kind]];
   const switchId = `engine-${kind}`;
@@ -54,6 +56,22 @@ export function EngineCard({ kind, showPort = false }: { kind: ProviderKind; sho
         {enabled && status === "stopped" && (
           <button className="btn btn-secondary h-9" onClick={() => void start(kind)}>
             {t.engines.start}
+          </button>
+        )}
+        {enabled && (status === "running" || status === "starting") && (
+          <button
+            className="btn btn-ghost h-9 text-fg-muted"
+            disabled={status === "starting"}
+            onClick={() => void restart(kind)}
+            title={t.engines.restartHint(name)}
+          >
+            <RotateCcw
+              size={15}
+              strokeWidth={1.75}
+              className={status === "starting" ? "animate-spin motion-reduce:animate-none" : ""}
+              aria-hidden="true"
+            />
+            {t.engines.restart}
           </button>
         )}
         <Switch id={switchId} label={t.engines.use(name)} checked={enabled} onChange={(on) => void toggle(on)} />

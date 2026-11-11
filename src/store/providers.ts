@@ -73,6 +73,8 @@ interface ProvidersState {
   installs: Partial<Record<ProviderKind, EngineInstall>>;
   init: () => Promise<void>;
   start: (kind: ProviderKind) => Promise<void>;
+  /** Stops the engine's server and starts it again. */
+  restart: (kind: ProviderKind) => Promise<void>;
   install: (kind: ProviderKind) => Promise<void>;
 }
 
@@ -106,6 +108,18 @@ export const useProviders = create<ProvidersState>((set, get) => ({
       set({ statuses: { ...get().statuses, [kind]: status } });
     } catch {
       set({ statuses: { ...get().statuses, [kind]: "stopped" } });
+    }
+  },
+
+  restart: async (kind) => {
+    set({ statuses: { ...get().statuses, [kind]: "starting" } });
+    try {
+      const status = await api.providerRestart(kind);
+      set({ statuses: { ...get().statuses, [kind]: status } });
+      toast(status === "running" ? t.engines.restarted(engineName(kind)) : t.engines.restartFailed(engineName(kind)));
+    } catch {
+      set({ statuses: { ...get().statuses, [kind]: "stopped" } });
+      toast(t.engines.restartFailed(engineName(kind)));
     }
   },
 

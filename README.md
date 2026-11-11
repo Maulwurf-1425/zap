@@ -107,7 +107,9 @@ that really come from this project. You can turn the automatic check off, or che
   - **links you paste into a message:** ZAP loads that page so the model can read it. You can turn
     this off in Settings → Web search;
   - **one-time downloads** when you set up voice or an engine: speech models, voices and
-    installers come from their official sources and are checked before use.
+    installers come from their official sources and are checked before use;
+  - **version check of the helper apps** (Ollama, LM Studio, Docker Desktop) via winget, only
+    when you open Settings → About.
 - Dictation and reading aloud run on your PC; your voice is never uploaded. The Discord status
   talks only to the Discord app on your PC.
 - No analytics, no tracking, no telemetry.

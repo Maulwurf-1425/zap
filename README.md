@@ -37,6 +37,11 @@ fast chat window, so you can use them the way you'd use ChatGPT, just offline an
   under each answer. Off by default.
 - **Optional file access:** let the model search, read and edit files on your PC. Every change asks
   for your OK first and shows exactly what will change. Mention any file with `@name`.
+- **ZAPs:** small agents that do a task by themselves in the background: run PowerShell commands,
+  open apps, research the web and work with files. Start them by hand, on a schedule or just ask
+  the chat. Every command can require your OK, destructive ones always do.
+- **Resource monitor:** press F5 anywhere to see CPU, RAM, graphics card and tokens used by ZAP and
+  its engines, and unload models you don't need.
 - **Organized:** chat groups with colors, pinning, full-text search across all chats, and Markdown
   or JSON export.
 - **Blueprints:** save prompts you use often and start them from the new-chat screen with one
@@ -109,7 +114,9 @@ that really come from this project. You can turn the automatic check off, or che
   - **one-time downloads** when you set up voice or an engine: speech models, voices and
     installers come from their official sources and are checked before use;
   - **version check of the helper apps** (Ollama, LM Studio, Docker Desktop) via winget, only
-    when you open Settings → About.
+    when you open Settings → About;
+  - **ZAPs**, only for the tools you give them: a ZAP with web research searches online like web
+    search does. ZAP avatars are generated on your PC.
 - Dictation and reading aloud run on your PC; your voice is never uploaded. The Discord status
   talks only to the Discord app on your PC.
 - No analytics, no tracking, no telemetry.
@@ -131,6 +138,7 @@ that really come from this project. You can turn the automatic check off, or che
 | Ctrl+,              | Settings                            |
 | Ctrl+Shift+C        | Copy the last answer                |
 | Ctrl+↑ / ↓          | Previous / next chat                |
+| F5                  | Resource monitor                    |
 | Esc                 | Stop the answer / close             |
 | Enter / Shift+Enter | Send / new line                     |
 

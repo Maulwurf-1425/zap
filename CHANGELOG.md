@@ -4,6 +4,61 @@ Each release has a `## <version>` heading, optionally followed by ` – <update 
 and one `### English` and one `### Deutsch` section. The release workflow publishes the
 section of the tagged version, and ZAP shows it before and after updating.
 
+## 0.5.0 – Welcome ZAPs!
+
+### English
+
+- **ZAPs:** small agents that do a task by themselves in the background. Give one a job in your
+  own words and the tools it may use: PowerShell commands, opening apps, files and links, web
+  research, and your files. Watch every step live, stop it any time, and look back at earlier
+  runs with their report.
+- **Ask the chat:** "Create a ZAP that sorts my downloads every morning" – the chat sets it up,
+  starts, stops or deletes ZAPs for you. Creating and deleting always need your OK.
+- **You stay in control:** choose whether every command needs your OK or ZAPs may run freely.
+  Commands that could damage Windows or wipe data always ask, no matter what.
+- **Schedules:** start a ZAP when ZAP starts, every few minutes or hours, or daily at a set time
+  (only on chosen weekdays, if you like).
+- **Runs in the background:** closing the window keeps ZAP in the tray, it can start with Windows,
+  and a notification tells you when a ZAP is done or waits for your OK. Click it to jump right
+  to that ZAP.
+- **Fast and frugal:** thinking can be switched off per ZAP (much faster, far fewer tokens), and
+  limits for tokens and runtime stop a ZAP that runs too long. Every run shows its runtime and
+  tokens, live and in total.
+- **Avatars:** every ZAP gets its own face (generated on your PC with DiceBear), or keeps the ZAP
+  bolt.
+- **Resources at a glance (F5):** press F5 anywhere to see CPU, RAM, graphics card and tokens used
+  by ZAP, Ollama, LM Studio and SearXNG, and unload models you don't need.
+- **Smarter model choice:** ZAP warns when a model won't fit into your graphics memory or can't
+  use tools, and unloads idle models after a time you choose.
+- **Nicer menus:** dropdowns now match the rest of ZAP.
+
+### Deutsch
+
+- **ZAPs:** kleine Agents, die eine Aufgabe selbstständig im Hintergrund erledigen. Gib einem ZAP
+  einen Auftrag in deinen Worten und die Werkzeuge, die er nutzen darf: PowerShell-Befehle, Apps,
+  Dateien und Links öffnen, Web-Recherche und deine Dateien. Du siehst jeden Schritt live, kannst
+  jederzeit stoppen und frühere Läufe mit ihrem Bericht nachlesen.
+- **Einfach den Chat fragen:** „Leg einen ZAP an, der jeden Morgen meine Downloads sortiert“ –
+  der Chat richtet ihn ein, startet, stoppt oder löscht ZAPs für dich. Anlegen und Löschen
+  brauchen immer dein OK.
+- **Du behältst die Kontrolle:** Entscheide, ob jeder Befehl dein OK braucht oder ZAPs frei
+  arbeiten dürfen. Befehle, die Windows beschädigen oder Daten löschen könnten, fragen immer.
+- **Zeitpläne:** Starte einen ZAP beim Start von ZAP, alle paar Minuten oder Stunden oder täglich
+  zu einer festen Uhrzeit (auf Wunsch nur an bestimmten Wochentagen).
+- **Läuft im Hintergrund:** Beim Schließen bleibt ZAP im Infobereich, es kann mit Windows starten,
+  und eine Benachrichtigung sagt dir, wenn ein ZAP fertig ist oder auf dein OK wartet. Ein Klick
+  darauf bringt dich direkt zu diesem ZAP.
+- **Schnell und sparsam:** Nachdenken lässt sich pro ZAP abschalten (viel schneller, deutlich
+  weniger Tokens), und Grenzen für Tokens und Laufzeit stoppen einen ZAP, der zu lange läuft. Jeder
+  Lauf zeigt Laufzeit und Tokens, live und insgesamt.
+- **Avatare:** Jeder ZAP bekommt ein eigenes Gesicht (auf deinem PC mit DiceBear erzeugt) oder
+  behält den ZAP-Blitz.
+- **Ressourcen auf einen Blick (F5):** Drück überall F5 und sieh CPU, RAM, Grafikkarte und Tokens
+  von ZAP, Ollama, LM Studio und SearXNG, und entlade Modelle, die du gerade nicht brauchst.
+- **Klügere Modellwahl:** ZAP warnt, wenn ein Modell nicht in deinen Grafikspeicher passt oder
+  keine Tools kann, und entlädt unbenutzte Modelle nach einer Zeit, die du festlegst.
+- **Schönere Menüs:** Auswahllisten passen jetzt zum Rest von ZAP.
+
 ## 0.4.1 – Small Detail Improvements
 
 ### English

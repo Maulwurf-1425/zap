@@ -322,6 +322,14 @@ export interface Zap {
   time_limit: number | null;
   /** Next scheduled start (Unix ms), from the backend. */
   next_run?: number | null;
+  /** Generated avatar; null shows the ZAP bolt. */
+  avatar: ZapAvatar | null;
+}
+
+/** DiceBear style and seed (see lib/avatars.ts). */
+export interface ZapAvatar {
+  style: string;
+  seed: string;
 }
 
 export type ZapRunStatus = "running" | "done" | "failed" | "stopped";
@@ -647,6 +655,7 @@ export const api = {
   zapActiveRuns: () => invoke<ZapRun[]>("zap_active_runs"),
   zapStart: (zapId: string, input: string | null, model: string | null) =>
     invoke<ZapRun>("zap_start", { zapId, input, model }),
+  zapAvatarSave: (zapId: string, pngBase64: string | null) => invoke<void>("zap_avatar_save", { zapId, pngBase64 }),
   zapStop: (runId: string) => invoke<void>("zap_stop", { runId }),
 
   getSettings: () => invoke<Settings>("get_settings"),

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CalendarClock,
   ChevronDown,
+  Dices,
   Coins,
   Cpu,
   ListChecks,
@@ -19,7 +20,8 @@ import { Select } from "./ui/Select";
 import { IconButton } from "./ui/IconButton";
 import { Markdown } from "./Markdown";
 import { ToolCards } from "./ToolCards";
-import { BLUEPRINT_ICONS, FALLBACK_ICON } from "../lib/blueprints";
+import { AVATAR_STYLE_IDS, randomSeed, useAvatarUri } from "../lib/avatars";
+import { DotBolt } from "./Brand";
 import {
   modelLabel,
   parseStats,
@@ -58,21 +60,38 @@ const TOKEN_BUDGETS = [5_000, 10_000, 25_000, 50_000, 100_000];
 const TIME_LIMITS = [2, 5, 10, 15, 30, 60, 120];
 
 /** Rounded icon tile in the ZAP's color (accent when it has none). */
-export function ZapBadge({ zap, size = 32 }: { zap: Pick<Zap, "icon" | "color">; size?: number }) {
-  const Icon = BLUEPRINT_ICONS[zap.icon] ?? FALLBACK_ICON;
+export function ZapBadge({
+  zap,
+  size = 32,
+  running = false,
+}: {
+  zap: Pick<Zap, "avatar" | "color">;
+  size?: number;
+  /** Animates the bolt while the ZAP works. */
+  running?: boolean;
+}) {
+  const uri = useAvatarUri(zap.avatar, zap.color);
+  if (uri) {
+    return (
+      <img
+        src={uri}
+        alt=""
+        width={size}
+        height={size}
+        draggable={false}
+        className="flex-none rounded-md bg-surface-2"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   const color = zap.color ?? "var(--coral)";
   return (
     <span
       className="flex flex-none items-center justify-center rounded-md"
-      style={{
-        width: size,
-        height: size,
-        color,
-        background: `color-mix(in srgb, ${color} 18%, transparent)`,
-      }}
+      style={{ width: size, height: size, background: `color-mix(in srgb, ${color} 18%, transparent)` }}
       aria-hidden="true"
     >
-      <Icon size={Math.round(size * 0.5)} strokeWidth={1.75} />
+      <DotBolt size={Math.round(size * 0.78)} variant={running ? "loop" : "static"} />
     </span>
   );
 }
@@ -171,7 +190,7 @@ export function ZapView() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[var(--content-w)] flex-col gap-6 px-6 py-8">
           <header className="flex items-start gap-4">
-            <ZapBadge zap={zap} size={44} />
+            <ZapBadge zap={zap} size={52} running={Boolean(live)} />
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-h2">{zap.name}</h1>
               <p className="text-caption text-fg-muted">
@@ -690,29 +709,42 @@ function EditorForm({ initial, onClose }: { initial: Zap; onClose: () => void })
         </Field>
 
         <div className="flex flex-col gap-2">
-          <span className="text-ui">{e.icon}</span>
-          <div role="radiogroup" aria-label={e.icon} className="flex flex-wrap gap-1">
-            {Object.entries(BLUEPRINT_ICONS).map(([name, Icon]) => {
-              const checked = zap.icon === name;
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-ui">{e.avatar}</span>
+            {zap.avatar && (
+              <button
+                type="button"
+                className="btn btn-ghost h-8 px-2.5 text-caption"
+                onClick={() => setZap((z) => (z.avatar ? { ...z, avatar: { ...z.avatar, seed: randomSeed() } } : z))}
+              >
+                <Dices size={14} strokeWidth={1.75} aria-hidden="true" />
+                {e.reroll}
+              </button>
+            )}
+          </div>
+          <div role="radiogroup" aria-label={e.avatar} className="flex flex-wrap gap-2">
+            {[null, ...AVATAR_STYLE_IDS].map((style) => {
+              const checked = (zap.avatar?.style ?? null) === style;
+              const preview = style ? { style, seed: zap.avatar?.seed ?? zap.name ?? "zap" } : null;
               return (
                 <button
-                  key={name}
+                  key={style ?? "bolt"}
                   type="button"
                   role="radio"
                   aria-checked={checked}
-                  aria-label={name}
-                  onClick={() => patch({ icon: name })}
-                  className={`flex size-9 items-center justify-center rounded-md border transition-colors ${
-                    checked
-                      ? "border-[var(--coral-ring)] bg-surface-2 text-fg"
-                      : "border-transparent text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  aria-label={style ? (e.avatarStyles[style] ?? style) : e.noAvatar}
+                  title={style ? (e.avatarStyles[style] ?? style) : e.noAvatar}
+                  onClick={() => patch({ avatar: preview })}
+                  className={`rounded-lg border-2 p-0.5 transition-colors ${
+                    checked ? "border-coral" : "border-transparent hover:border-border-strong"
                   }`}
                 >
-                  <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <ZapBadge zap={{ avatar: preview, color: zap.color }} size={44} />
                 </button>
               );
             })}
           </div>
+          <p className="text-caption text-fg-muted">{e.avatarHint}</p>
         </div>
 
         <div className="flex flex-col gap-2">

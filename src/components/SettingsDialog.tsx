@@ -42,6 +42,7 @@ import { DEFAULT_SETTINGS, TYPOGRAPHY_KEYS, useSettings } from "../store/setting
 import { releaseLabel, useUpdates } from "../store/updates";
 import { VoiceTab } from "./VoiceSettings";
 import { IdleModelsField, ZapsTab } from "./ZapSettings";
+import { useAvatarCredits } from "../lib/avatars";
 import { useDiscord } from "../store/discord";
 import { CURATED_MODELS, curatedDescription, hasOllamaModel, MODEL_NAME, useModels } from "../store/models";
 import { useProviders } from "../store/providers";
@@ -1690,6 +1691,7 @@ const LICENSES: [string, string][] = [
   ["tokio, reqwest, serde", "MIT / Apache-2.0"],
   ["rusqlite", "MIT"],
   ["SQLite", "Public Domain"],
+  ["DiceBear", "MIT"],
 ];
 
 function UpdatesSection() {
@@ -1807,6 +1809,7 @@ function ToolVersionRow({ name, info, loading }: { name: string; info?: ToolVers
 }
 
 function AboutTab() {
+  const avatarCredits = useAvatarCredits();
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [tools, setTools] = useState<ToolVersion[] | null>(null);
   // Starts true: the first check runs as soon as the tab opens.
@@ -1883,6 +1886,18 @@ function AboutTab() {
             <li key={name} className="flex h-9 items-center justify-between text-caption">
               <span>{name}</span>
               <span className="text-fg-muted">{license}</span>
+            </li>
+          ))}
+        </ul>
+      </Section>
+      <Section title={a.avatarCredits}>
+        <ul className="flex flex-col">
+          {avatarCredits?.map((c) => (
+            <li key={c.title} className="flex min-h-9 items-center justify-between gap-4 py-1 text-caption">
+              <span>
+                {c.title} <span className="text-fg-muted">· {c.creator}</span>
+              </span>
+              <span className="flex-none text-fg-muted">{c.license}</span>
             </li>
           ))}
         </ul>

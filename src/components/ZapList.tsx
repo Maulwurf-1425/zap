@@ -56,7 +56,7 @@ export function ZapList({ onNavigate }: { onNavigate: () => void }) {
                     onNavigate();
                   }}
                 >
-                  <ZapBadge zap={zap} size={22} />
+                  <ZapBadge zap={zap} size={24} running={busy} />
                   <span className="min-w-0 flex-1 truncate">{zap.name}</span>
                   {!busy && isScheduled(zap) && (
                     <span title={scheduleText(zap) ?? undefined} className="flex flex-none text-fg-subtle">

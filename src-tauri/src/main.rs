@@ -168,6 +168,7 @@ fn main() {
             zaps::zap_active_runs,
             zaps::zap_start,
             zaps::zap_stop,
+            zaps::zap_avatar_save,
             commands::get_settings,
             commands::set_settings,
         ])

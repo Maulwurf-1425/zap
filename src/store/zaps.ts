@@ -12,6 +12,7 @@ import {
 } from "../lib/ipc";
 import { t } from "../lib/i18n";
 import { useModels } from "./models";
+import { avatarPng, defaultAvatar } from "../lib/avatars";
 
 /** A run in progress: the report so far and its tool steps. */
 export interface LiveRun {
@@ -74,7 +75,27 @@ export function blankZap(): Zap {
     thinking: false,
     token_budget: null,
     time_limit: null,
+    avatar: defaultAvatar(),
   };
+}
+
+/** Avatar keys whose PNG the backend already has (style|seed|color per ZAP). */
+const syncedAvatars = new Map<string, string>();
+
+/** Keeps the notification images in step with the ZAPs' avatars (also for
+ *  ZAPs the chat created). Runs after every reload. */
+async function syncAvatarPngs(zaps: Zap[]) {
+  for (const zap of zaps) {
+    const key = zap.avatar ? `${zap.avatar.style}|${zap.avatar.seed}|${zap.color ?? ""}` : "";
+    if (syncedAvatars.get(zap.id) === key) continue;
+    try {
+      const png = zap.avatar ? await avatarPng(zap.avatar, zap.color) : null;
+      await api.zapAvatarSave(zap.id, png);
+      syncedAvatars.set(zap.id, key);
+    } catch {
+      // Notifications then show no avatar; the next reload tries again.
+    }
+  }
 }
 
 /** Running run of a ZAP, if any. */
@@ -245,6 +266,7 @@ export const useZaps = create<ZapsState>((set, get) => {
         const zaps = await api.zapsList();
         const ids = new Set(zaps.map((z) => z.id));
         set({ zaps, loaded: true, openId: ids.has(get().openId ?? "") ? get().openId : null });
+        void syncAvatarPngs(zaps);
       } catch {
         set({ loaded: true });
       }
@@ -272,6 +294,7 @@ export const useZaps = create<ZapsState>((set, get) => {
         const saved = await api.zapSave(zap);
         const exists = get().zaps.some((z) => z.id === saved.id);
         set({ zaps: exists ? get().zaps.map((z) => (z.id === saved.id ? saved : z)) : [...get().zaps, saved] });
+        void syncAvatarPngs([saved]);
         return saved;
       } catch {
         toast(t.errors.generic);

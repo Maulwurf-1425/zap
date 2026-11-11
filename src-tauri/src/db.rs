@@ -162,6 +162,8 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE zaps ADD COLUMN thinking INTEGER NOT NULL DEFAULT 1;
      ALTER TABLE zaps ADD COLUMN token_budget INTEGER;
      ALTER TABLE zaps ADD COLUMN time_limit INTEGER;",
+    // 13: ZAP avatars (DiceBear style + seed, JSON)
+    "ALTER TABLE zaps ADD COLUMN avatar TEXT;",
 ];
 
 pub fn schema_version(conn: &Connection) -> AppResult<i64> {
@@ -970,6 +972,13 @@ impl Default for ZapSchedule {
     }
 }
 
+/// A generated avatar (DiceBear style and seed); none = the ZAP bolt.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct ZapAvatar {
+    pub style: String,
+    pub seed: String,
+}
+
 fn default_true() -> bool {
     true
 }
@@ -1002,6 +1011,8 @@ pub struct Zap {
     /// Next scheduled start (Unix ms), filled in when listing; never stored.
     #[serde(default, skip_deserializing)]
     pub next_run: Option<i64>,
+    #[serde(default)]
+    pub avatar: Option<ZapAvatar>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1028,7 +1039,7 @@ pub struct ZapRun {
 }
 
 const ZAP_COLUMNS: &str =
-    "id, name, icon, color, instructions, model, tools, max_steps, created_at, updated_at, schedule, thinking, token_budget, time_limit";
+    "id, name, icon, color, instructions, model, tools, max_steps, created_at, updated_at, schedule, thinking, token_budget, time_limit, avatar";
 
 fn row_to_zap(r: &rusqlite::Row<'_>) -> rusqlite::Result<Zap> {
     let tools: String = r.get(6)?;
@@ -1051,6 +1062,9 @@ fn row_to_zap(r: &rusqlite::Row<'_>) -> rusqlite::Result<Zap> {
         token_budget: r.get(12)?,
         time_limit: r.get(13)?,
         next_run: None,
+        avatar: r
+            .get::<_, Option<String>>(14)?
+            .and_then(|s| serde_json::from_str(&s).ok()),
     })
 }
 
@@ -1078,14 +1092,15 @@ pub fn get_zap(conn: &Connection, id: &str) -> AppResult<Option<Zap>> {
 pub fn save_zap(conn: &Connection, zap: &Zap) -> AppResult<()> {
     conn.execute(
         "INSERT INTO zaps (id, name, icon, color, instructions, model, tools, max_steps, created_at, updated_at,
-                           schedule, thinking, token_budget, time_limit)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                           schedule, thinking, token_budget, time_limit, avatar)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
          ON CONFLICT(id) DO UPDATE SET
              name = excluded.name, icon = excluded.icon, color = excluded.color,
              instructions = excluded.instructions, model = excluded.model, tools = excluded.tools,
              max_steps = excluded.max_steps, updated_at = excluded.updated_at,
              schedule = excluded.schedule, thinking = excluded.thinking,
-             token_budget = excluded.token_budget, time_limit = excluded.time_limit",
+             token_budget = excluded.token_budget, time_limit = excluded.time_limit,
+             avatar = excluded.avatar",
         params![
             zap.id,
             zap.name.trim(),
@@ -1101,6 +1116,9 @@ pub fn save_zap(conn: &Connection, zap: &Zap) -> AppResult<()> {
             zap.thinking,
             zap.token_budget,
             zap.time_limit,
+            zap.avatar
+                .as_ref()
+                .and_then(|a| serde_json::to_string(a).ok()),
         ],
     )?;
     Ok(())
@@ -1559,6 +1577,10 @@ mod tests {
             token_budget: Some(20_000),
             time_limit: Some(10),
             next_run: None,
+            avatar: Some(ZapAvatar {
+                style: "bottts".into(),
+                seed: "abc".into(),
+            }),
         };
         save_zap(&conn, &zap).unwrap();
         zap.instructions = "Sortiere Downloads nach Typ.".into();
@@ -1573,6 +1595,10 @@ mod tests {
         assert_eq!(
             (loaded.token_budget, loaded.time_limit),
             (Some(20_000), Some(10))
+        );
+        assert_eq!(
+            loaded.avatar.as_ref().map(|a| a.style.as_str()),
+            Some("bottts")
         );
 
         let mut run = ZapRun {

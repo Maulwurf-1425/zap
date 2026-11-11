@@ -96,16 +96,92 @@ pub fn take_notified() -> Option<String> {
     lock(&NOTIFIED).take()
 }
 
+/// Where a ZAP's avatar is kept as PNG (for notifications).
+fn avatar_path(state: &AppState, zap_id: &str) -> std::path::PathBuf {
+    state.data_dir.join("avatars").join(format!("{zap_id}.png"))
+}
+
 /// A Windows notification about a ZAP, when enabled and ZAP is not in front.
+/// It shows the ZAP's avatar, and clicking it opens that ZAP.
 fn notify(app: &AppHandle, zap_id: &str, title: &str, body: &str) {
-    use tauri_plugin_notification::NotificationExt;
     let state = app.state::<AppState>();
     let enabled = db::get_settings(&state.db()).is_ok_and(|s| s.zap_notifications);
     if !enabled || window_in_focus(app) {
         return;
     }
     *lock(&NOTIFIED) = Some(zap_id.to_string());
+    let avatar = Some(avatar_path(&state, zap_id)).filter(|p| p.is_file());
+    #[cfg(windows)]
+    if show_toast(app, title, body, avatar.as_deref()) {
+        return;
+    }
+    let _ = avatar;
+    use tauri_plugin_notification::NotificationExt;
     let _ = app.notification().builder().title(title).body(body).show();
+}
+
+/// Windows toast with the avatar as round icon and a click handler.
+#[cfg(windows)]
+fn show_toast(app: &AppHandle, title: &str, body: &str, avatar: Option<&std::path::Path>) -> bool {
+    use tauri_winrt_notification::{IconCrop, Toast};
+    // The installed app has its own id; a dev build borrows PowerShell's.
+    let installed = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|d| d.to_path_buf()))
+        .is_some_and(|dir| !dir.ends_with("target\\debug") && !dir.ends_with("target\\release"));
+    let app_id = if installed {
+        app.config().identifier.clone()
+    } else {
+        Toast::POWERSHELL_APP_ID.to_string()
+    };
+    let mut toast = Toast::new(&app_id).title(title).text1(body);
+    if let Some(path) = avatar {
+        toast = toast.icon(path, IconCrop::Circular, "");
+    }
+    let handle = app.clone();
+    toast
+        .on_activated(move |_| {
+            crate::tray::show_main(&handle);
+            Ok(())
+        })
+        .show()
+        .is_ok()
+}
+
+/// Stores (or with `None` removes) a ZAP's avatar as PNG, rendered by the UI.
+#[tauri::command]
+pub fn zap_avatar_save(
+    state: State<'_, AppState>,
+    zap_id: String,
+    png_base64: Option<String>,
+) -> AppResult<()> {
+    use base64::Engine;
+    if zap_id.is_empty()
+        || !zap_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return Err(AppError::Other("bad id".into()));
+    }
+    let path = avatar_path(&state, &zap_id);
+    match png_base64 {
+        Some(data) => {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(data.trim())
+                .map_err(|_| AppError::Other("bad image".into()))?;
+            if bytes.len() > 512 * 1024 || !bytes.starts_with(b"\x89PNG") {
+                return Err(AppError::Other("bad image".into()));
+            }
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(&path, bytes)?;
+        }
+        None => {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    Ok(())
 }
 
 fn zap_of_run(state: &AppState, run_id: &str) -> Option<Zap> {
@@ -500,6 +576,7 @@ fn delete(app: &AppHandle, state: &AppState, id: &str) -> AppResult<()> {
         }
     }
     db::delete_zap(&state.db(), id)?;
+    let _ = std::fs::remove_file(avatar_path(state, id));
     emit_changed(app);
     Ok(())
 }
@@ -797,6 +874,11 @@ pub async fn run_tool(
                 token_budget: None,
                 time_limit: None,
                 next_run: None,
+                // A robot avatar, different for every ZAP.
+                avatar: Some(db::ZapAvatar {
+                    style: "bottts-neutral".into(),
+                    seed: uuid::Uuid::new_v4().to_string(),
+                }),
             };
             if let Err(e) = validate(&mut zap) {
                 return (activity.failed("failed"), format!("Error: {e}"));
@@ -960,6 +1042,7 @@ mod tests {
             token_budget: None,
             time_limit: None,
             next_run: None,
+            avatar: None,
         };
         let p = task_prompt(&zap);
         assert!(p.contains("\"Sorter\""));

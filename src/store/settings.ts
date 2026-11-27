@@ -55,6 +55,8 @@ export const DEFAULT_SETTINGS: Settings = {
   zap_notifications: true,
   model_idle_minutes: null,
   cloud_providers: [],
+  quick_ask_enabled: true,
+  quick_ask_shortcut: "Alt+Space",
 };
 
 /** Fields the appearance tab's reset button restores. */

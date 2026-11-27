@@ -4,6 +4,10 @@ import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "./styles/globals.css";
 import App from "./App";
+import { QuickAsk } from "./components/QuickAsk";
+
+// The same bundle runs the main window and the quick-ask window.
+const isQuick = new URLSearchParams(window.location.search).has("quick");
 
 // No browser context menu (chat items provide their own).
 window.addEventListener("contextmenu", (e) => {
@@ -13,9 +17,5 @@ window.addEventListener("contextmenu", (e) => {
 
 const root = document.getElementById("root");
 if (root) {
-  createRoot(root).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
+  createRoot(root).render(<StrictMode>{isQuick ? <QuickAsk /> : <App />}</StrictMode>);
 }

@@ -317,6 +317,10 @@ export interface Settings {
   model_idle_minutes: number | null;
   /** Cloud model providers (keys are stored separately). */
   cloud_providers: CloudConnection[];
+  /** Quick ask window on a global shortcut. */
+  quick_ask_enabled: boolean;
+  /** E.g. "Alt+Space". */
+  quick_ask_shortcut: string;
 }
 
 /** Tool families a ZAP may use. */
@@ -711,6 +715,10 @@ export const api = {
     invoke<ZapRun>("zap_start", { zapId, input, model }),
   zapAvatarSave: (zapId: string, pngBase64: string | null) => invoke<void>("zap_avatar_save", { zapId, pngBase64 }),
   pickFolder: () => invoke<string | null>("pick_folder"),
+  quickHide: () => invoke<void>("quick_hide"),
+  quickApplyShortcut: () => invoke<string | null>("quick_apply_shortcut"),
+  quickModel: () => invoke<string | null>("quick_model"),
+  quickOpenChat: (chatId: string) => invoke<void>("quick_open_chat", { chatId }),
   zapStop: (runId: string) => invoke<void>("zap_stop", { runId }),
 
   getSettings: () => invoke<Settings>("get_settings"),

@@ -190,6 +190,7 @@ function GeneralTab() {
           ]}
         />
       </Section>
+      <QuickAskSection />
       <DiscordSection />
       <Section title={t.settings.general.onboarding}>
         <div className="flex items-center justify-between gap-4">
@@ -226,6 +227,47 @@ function GeneralTab() {
 }
 
 /** "Playing ZAP" in Discord; hidden in builds without a Discord app id. */
+const QUICK_SHORTCUTS = ["Alt+Space", "Ctrl+Space", "Ctrl+Alt+Space", "Ctrl+Shift+Space", "Alt+Q"];
+
+function QuickAskSection() {
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const q = t.quick;
+  const apply = async (patch: Partial<Settings>) => {
+    await update(patch);
+    const error = await api.quickApplyShortcut().catch(() => "shortcut_taken");
+    if (error) toast(q.errors[error] ?? t.errors.generic);
+  };
+  return (
+    <Section title={q.title}>
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface-1 p-4">
+        <div>
+          <label htmlFor="quick-enabled" className="text-ui">
+            {q.enable}
+          </label>
+          <p className="text-caption text-fg-muted">{q.enableHint(settings.quick_ask_shortcut)}</p>
+        </div>
+        <Switch
+          id="quick-enabled"
+          label={q.enable}
+          checked={settings.quick_ask_enabled}
+          onChange={(on) => void apply({ quick_ask_enabled: on })}
+        />
+      </div>
+      {settings.quick_ask_enabled && (
+        <Field label={q.shortcut} htmlFor="quick-shortcut" hint={q.shortcutHint}>
+          <Select
+            id="quick-shortcut"
+            value={settings.quick_ask_shortcut}
+            onChange={(v) => void apply({ quick_ask_shortcut: v })}
+            options={QUICK_SHORTCUTS.map((s) => ({ value: s, label: s.replace("Ctrl", q.ctrl) }))}
+          />
+        </Field>
+      )}
+    </Section>
+  );
+}
+
 function DiscordSection() {
   const available = useDiscord((s) => s.available);
   const connected = useDiscord((s) => s.connected);

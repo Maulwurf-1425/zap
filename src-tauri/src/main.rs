@@ -18,6 +18,7 @@ mod ndjson;
 mod ollama;
 mod openai;
 mod provider;
+mod quick;
 mod schedule;
 mod state;
 mod system_tools;
@@ -48,6 +49,7 @@ fn main() {
             tray::show_main(app)
         }))
         .plugin(tauri_plugin_notification::init())
+        .plugin(quick::plugin())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![tray::HIDDEN_ARG]),
@@ -55,6 +57,8 @@ fn main() {
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(window_flags())
+                // The quick window always opens centered.
+                .with_denylist(&[quick::LABEL])
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
@@ -84,13 +88,20 @@ fn main() {
             zaps::init(app.handle());
             schedule::init(app.handle());
             triggers::init(app.handle());
+            quick::init(app.handle());
             // With file access on, keep the file index ready (and live) from the start.
             if db::get_settings(&app.state::<AppState>().db()).is_ok_and(|s| s.file_tools_enabled) {
                 file_tools::ensure_index(app.handle());
             }
             Ok(())
         })
-        .on_window_event(tray::on_window_event)
+        .on_window_event(|window, event| {
+            if window.label() == quick::LABEL {
+                quick::on_window_event(window, event);
+            } else {
+                tray::on_window_event(window, event);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::provider_status,
@@ -178,6 +189,10 @@ fn main() {
             zaps::zap_stop,
             zaps::zap_avatar_save,
             commands::pick_folder,
+            quick::quick_hide,
+            quick::quick_apply_shortcut,
+            quick::quick_model,
+            quick::quick_open_chat,
             commands::get_settings,
             commands::set_settings,
         ])

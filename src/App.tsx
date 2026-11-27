@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { Toaster } from "sonner";
+import { listen } from "@tauri-apps/api/event";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar } from "./components/Sidebar";
 import { focusComposer } from "./lib/actions";
@@ -72,6 +73,12 @@ export default function App() {
         .getState()
         .init()
         .catch(() => undefined);
+      void listen<{ chat_id: string }>("quick://open-chat", (e) => {
+        void useChats
+          .getState()
+          .reload()
+          .then(() => useChats.getState().select(e.payload.chat_id));
+      });
       if (!useSettings.getState().settings.onboarding_done) useUi.getState().setOnboardingOpen(true);
       void useUpdates
         .getState()

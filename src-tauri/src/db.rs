@@ -346,6 +346,10 @@ pub struct Settings {
     pub model_idle_minutes: Option<u32>,
     /// Cloud model providers (keys are in the Credential Manager).
     pub cloud_providers: Vec<CloudConnection>,
+    /// Quick ask window on a global shortcut.
+    pub quick_ask_enabled: bool,
+    /// E.g. "Alt+Space".
+    pub quick_ask_shortcut: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -408,6 +412,8 @@ impl Default for Settings {
             zap_notifications: true,
             model_idle_minutes: None,
             cloud_providers: Vec::new(),
+            quick_ask_enabled: true,
+            quick_ask_shortcut: "Alt+Space".into(),
         }
     }
 }

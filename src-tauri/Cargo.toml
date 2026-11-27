@@ -44,6 +44,7 @@ sysinfo = { version = "0.36.1", default-features = false, features = ["system"] 
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
+pdf-extract = "0.12.1"
 
 [profile.release]
 codegen-units = 1

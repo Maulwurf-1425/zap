@@ -21,7 +21,7 @@ use crate::provider::{
 use crate::state::{lock, AppState, Decision};
 use crate::tools;
 use crate::web;
-use crate::{file_tools, files, installer, lmstudio, system_tools, ui_control, zaps};
+use crate::{file_tools, files, installer, knowledge, lmstudio, system_tools, ui_control, zaps};
 
 const SEARCH_LIMIT: usize = 50;
 const TITLE_INPUT_CHARS: usize = 1200;
@@ -460,6 +460,10 @@ pub async fn run_agent(
     }
     if options.terminal || options.apps {
         prompts.push(system_tools::system_prompt(options.terminal, options.apps));
+    }
+    if options.knowledge {
+        specs.push(knowledge::tool_spec());
+        prompts.push(knowledge::system_prompt());
     }
     if options.control {
         specs.extend(ui_control::tool_specs());

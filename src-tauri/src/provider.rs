@@ -206,6 +206,9 @@ pub struct ChatOptions {
     /// Offer reading and operating other apps' windows (ZAPs).
     #[serde(default)]
     pub control: bool,
+    /// Offer the search in the user's knowledge folders.
+    #[serde(default)]
+    pub knowledge: bool,
     /// Offer the ZAP management tools (list, create, start, stop, delete).
     #[serde(default)]
     pub zaps: bool,

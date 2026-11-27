@@ -321,6 +321,12 @@ export interface Settings {
   quick_ask_enabled: boolean;
   /** E.g. "Alt+Space". */
   quick_ask_shortcut: string;
+  /** Folders whose documents ZAP can search. */
+  knowledge_folders: string[];
+  /** Ollama embedding model for the knowledge folders. */
+  knowledge_model: string;
+  /** Knowledge search in chats (composer switch). */
+  knowledge_enabled: boolean;
 }
 
 /** Tool families a ZAP may use. */
@@ -578,6 +584,26 @@ export interface ChatOptions {
   files?: boolean;
   /** Offer the ZAP management tools. */
   zaps?: boolean;
+  /** Offer the search in the knowledge folders. */
+  knowledge?: boolean;
+}
+
+export interface KnowledgeHit {
+  path: string;
+  name: string;
+  part: number;
+  text: string;
+  score: number;
+}
+
+export interface KnowledgeStatus {
+  files: number;
+  passages: number;
+  /** [path, error] of files that couldn't be read. */
+  failed: [string, string][];
+  progress: { indexing: boolean; done: number; total: number; current: string | null; error: string | null };
+  model: string;
+  model_ready: boolean;
 }
 
 export interface TokenEvent {
@@ -719,6 +745,10 @@ export const api = {
   quickApplyShortcut: () => invoke<string | null>("quick_apply_shortcut"),
   quickModel: () => invoke<string | null>("quick_model"),
   quickOpenChat: (chatId: string) => invoke<void>("quick_open_chat", { chatId }),
+  knowledgeStatus: () => invoke<KnowledgeStatus>("knowledge_status"),
+  knowledgeIndex: () => invoke<void>("knowledge_index"),
+  knowledgeSearch: (query: string) => invoke<KnowledgeHit[]>("knowledge_search", { query }),
+  knowledgeOpen: (path: string) => invoke<void>("knowledge_open", { path }),
   zapStop: (runId: string) => invoke<void>("zap_stop", { runId }),
 
   getSettings: () => invoke<Settings>("get_settings"),

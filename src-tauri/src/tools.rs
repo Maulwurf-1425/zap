@@ -52,7 +52,9 @@ impl ToolActivity {
     pub fn started(call: &ToolCall) -> Self {
         let args = &call.arguments;
         let input = match call.name.as_str() {
-            web::TOOL_SEARCH | file_tools::SEARCH => args["query"].as_str(),
+            web::TOOL_SEARCH | file_tools::SEARCH | crate::knowledge::SEARCH => {
+                args["query"].as_str()
+            }
             web::TOOL_FETCH => args["url"].as_str(),
             system_tools::RUN => args["command"].as_str(),
             system_tools::OPEN => args["target"].as_str(),
@@ -357,6 +359,8 @@ pub async fn run_any(
         file_tools::run(state, ctx, call, activity).await
     } else if system_tools::NAMES.contains(&name) {
         system_tools::run(state, ctx, call, activity).await
+    } else if name == crate::knowledge::SEARCH {
+        crate::knowledge::run_tool(state, ctx, call, activity).await
     } else if crate::ui_control::NAMES.contains(&name) {
         crate::ui_control::run(state, ctx, call, activity).await
     } else if zaps::NAMES.contains(&name) {

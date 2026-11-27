@@ -12,6 +12,7 @@ mod error;
 mod file_tools;
 mod files;
 mod installer;
+mod knowledge;
 mod lmstudio;
 mod monitor;
 mod ndjson;
@@ -89,6 +90,7 @@ fn main() {
             schedule::init(app.handle());
             triggers::init(app.handle());
             quick::init(app.handle());
+            knowledge::init(app.handle());
             // With file access on, keep the file index ready (and live) from the start.
             if db::get_settings(&app.state::<AppState>().db()).is_ok_and(|s| s.file_tools_enabled) {
                 file_tools::ensure_index(app.handle());
@@ -190,6 +192,10 @@ fn main() {
             zaps::zap_avatar_save,
             commands::pick_folder,
             quick::quick_hide,
+            knowledge::knowledge_status,
+            knowledge::knowledge_index,
+            knowledge::knowledge_search,
+            knowledge::knowledge_open,
             quick::quick_apply_shortcut,
             quick::quick_model,
             quick::quick_open_chat,

@@ -8,6 +8,7 @@ import {
   type ChatGroup,
   type ChatStats,
   type ErrorCode,
+  type KnowledgeHit,
   type Message,
   type PayloadMessage,
   type ToolActivity,
@@ -204,6 +205,12 @@ export function dateContext(now = new Date()): string {
   return `Current date and time: ${when.replace(" at ", ", ")} (the user's local time, UTC${sign}${hh}:${mm}).`;
 }
 
+/** Passages from the knowledge folders as context for models without tools. */
+export function knowledgeContext(hits: KnowledgeHit[]): string {
+  const excerpts = hits.map((h, i) => `[${i + 1}] ${h.name} (part ${h.part + 1})\n${h.text.trim()}`).join("\n\n");
+  return `Excerpts from the user's own documents (knowledge folders). Use them when they answer the question, cite them as [1], [2] with the file name, and say so if they don't contain the answer.\n\n${excerpts}`;
+}
+
 /** Tool activity of a reply (stored as JSON). */
 export function parseTools(raw: string | null | undefined): ToolActivity[] {
   if (!raw) return [];
@@ -388,11 +395,40 @@ export const useChats = create<ChatsState>((set, get) => {
 
     try {
       // Web tools only for models that can call tools.
-      const { web_search_enabled, file_tools_enabled, zaps_in_chat } = useSettings.getState().settings;
+      const { web_search_enabled, file_tools_enabled, zaps_in_chat, knowledge_enabled, knowledge_folders } =
+        useSettings.getState().settings;
       const web = web_search_enabled && tools;
       const files = file_tools_enabled && tools;
       const zaps = zaps_in_chat && tools;
-      await api.chatStream(chatId, model, payload, { temperature, num_ctx: context_length, web, files, zaps });
+      const knowledgeOn = knowledge_enabled && knowledge_folders.length > 0;
+      if (knowledgeOn) {
+        // Look up the question first and hand over the best passages: many
+        // models skip the search tool. Tool-capable ones can search further.
+        const question = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
+        const hits = (await api.knowledgeSearch(question).catch(() => [])).slice(0, 4);
+        if (hits.length > 0) {
+          payload.splice(1, 0, { role: "system" as const, content: knowledgeContext(hits) });
+          // Show which documents were consulted, like a tool step.
+          const seen = new Set<string>();
+          applyToolActivity(chatId, {
+            id: uid(),
+            name: "search_knowledge",
+            input: question.length > 60 ? `${question.slice(0, 59)}…` : question,
+            status: "done",
+            sources: hits
+              .filter((h) => !seen.has(h.path) && seen.add(h.path))
+              .map((h) => ({ title: h.name, url: h.path })),
+          });
+        }
+      }
+      await api.chatStream(chatId, model, payload, {
+        temperature,
+        num_ctx: context_length,
+        web,
+        files,
+        zaps,
+        knowledge: knowledgeOn && tools,
+      });
     } catch (err) {
       await finish(chatId, toAppError(err).code, null, false);
     }

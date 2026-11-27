@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
-import { File as FileIcon, Folder, FolderSearch, Globe, Square } from "lucide-react";
+import { BookOpen, File as FileIcon, Folder, FolderSearch, Globe, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Bolt } from "./Brand";
 import { ModelPicker } from "./ModelPicker";
@@ -8,6 +8,7 @@ import { DictationButton, VoiceBar } from "./Voice";
 import { NEW_CHAT_DRAFT, useChats } from "../store/chats";
 import { useModels } from "../store/models";
 import { useSettings } from "../store/settings";
+import { useUi } from "../store/ui";
 import { IconButton } from "./ui/IconButton";
 import { AttachmentError, attachmentFromBase64, readAttachment, type Attachment } from "../lib/attachments";
 import { api, toAppError, type FileHit } from "../lib/ipc";
@@ -64,6 +65,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const filesEnabled = useSettings((s) => s.settings.file_tools_enabled);
   const fullPermission = useSettings((s) => s.settings.file_permission === "full");
   const filesActive = filesEnabled && canUseTools;
+  const knowledgeFolders = useSettings((s) => s.settings.knowledge_folders.length);
+  const knowledgeEnabled = useSettings((s) => s.settings.knowledge_enabled);
+  // Works with every model: without tools, ZAP adds the passages itself.
+  const knowledgeActive = knowledgeEnabled && knowledgeFolders > 0;
   const areaRef = useRef<HTMLTextAreaElement>(null);
 
   // @-mentions: "@part" before the caret opens a file search popover.
@@ -341,6 +346,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             onClick={() => void updateSettings({ file_tools_enabled: !filesEnabled })}
           >
             <FolderSearch size={16} strokeWidth={1.75} />
+          </IconButton>
+          <IconButton
+            label={knowledgeFolders === 0 ? t.knowledge.setup : knowledgeActive ? t.knowledge.on : t.knowledge.off}
+            aria-pressed={knowledgeActive}
+            className={`size-8 rounded-full ${knowledgeActive ? "bg-surface-2 text-coral" : ""}`}
+            disabled={disabled}
+            onClick={() =>
+              knowledgeFolders === 0
+                ? useUi.getState().openSettings("knowledge")
+                : void updateSettings({ knowledge_enabled: !knowledgeEnabled })
+            }
+          >
+            <BookOpen size={16} strokeWidth={1.75} />
           </IconButton>
           <DictationButton disabled={disabled} onText={insertDictation} />
           <ModelPicker />

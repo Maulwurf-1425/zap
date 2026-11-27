@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { toast } from "sonner";
 import {
+  BookOpen,
   ChartColumn,
   Check,
   Database,
@@ -43,6 +44,7 @@ import { releaseLabel, useUpdates } from "../store/updates";
 import { VoiceTab } from "./VoiceSettings";
 import { IdleModelsField, ZapsTab } from "./ZapSettings";
 import { CloudSection } from "./CloudSettings";
+import { KnowledgeTab } from "./KnowledgeSettings";
 import { useAvatarCredits } from "../lib/avatars";
 import { useDiscord } from "../store/discord";
 import { CURATED_MODELS, curatedDescription, hasOllamaModel, MODEL_NAME, useModels } from "../store/models";
@@ -95,6 +97,7 @@ const tabs = (): { id: SettingsTab; label: string; icon: typeof Palette }[] => [
   { id: "usage", label: t.settings.tabs.usage, icon: ChartColumn },
   { id: "web", label: t.settings.tabs.web, icon: Globe },
   { id: "files", label: t.settings.tabs.files, icon: FolderSearch },
+  { id: "knowledge", label: t.knowledge.tab, icon: BookOpen },
   { id: "data", label: t.settings.tabs.data, icon: Database },
   { id: "about", label: t.settings.tabs.about, icon: Info },
 ];
@@ -155,6 +158,9 @@ export function SettingsDialog() {
             </Tabs.Content>
             <Tabs.Content value="files" className="outline-none">
               <FilesTab />
+            </Tabs.Content>
+            <Tabs.Content value="knowledge" className="outline-none">
+              <KnowledgeTab />
             </Tabs.Content>
             <Tabs.Content value="data" className="outline-none">
               <DataTab />

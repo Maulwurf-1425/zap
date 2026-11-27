@@ -2,7 +2,18 @@ import { create } from "zustand";
 import { useUpdates } from "./updates";
 
 export type SettingsTab =
-  "general" | "appearance" | "models" | "chat" | "voice" | "zaps" | "usage" | "web" | "files" | "data" | "about";
+  | "general"
+  | "appearance"
+  | "models"
+  | "chat"
+  | "voice"
+  | "zaps"
+  | "usage"
+  | "web"
+  | "files"
+  | "knowledge"
+  | "data"
+  | "about";
 
 export interface ConfirmRequest {
   title: string;

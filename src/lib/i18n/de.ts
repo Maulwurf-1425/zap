@@ -1145,6 +1145,43 @@ export const de: Strings = {
     },
   },
 
+  knowledge: {
+    tab: "Wissen",
+    title: "Wissensordner",
+    intro:
+      "Gib ZAP Ordner mit deinen PDFs, Dokumenten und Notizen. ZAP liest sie auf deinem PC und beantwortet Fragen dazu, mit den Dateien als Quellen. Nichts verlässt deinen PC.",
+    types: "Liest PDF-, Word- (.docx), Text- und Markdown-Dateien, auch in Unterordnern.",
+    addFolder: "Ordner hinzufügen",
+    removeFolder: "Ordner entfernen",
+    model: "Suchmodell",
+    needsOllama: "Braucht ein laufendes Ollama: Es macht deine Texte nach Bedeutung durchsuchbar.",
+    modelReady: "Installiert. Läuft lokal in Ollama.",
+    modelMissing: "Noch nicht installiert (etwa 270 MB). Einmal nötig für die Wissenssuche.",
+    download: "Herunterladen",
+    index: "Index",
+    indexing: (done: number, total: number) => `Lese Dateien … ${done} von ${total}`,
+    indexed: (files: string, passages: string) => `${files} Dateien, ${passages} Abschnitte durchsuchbar`,
+    reindex: "Jetzt aktualisieren",
+    failed: (n: number) =>
+      n === 1 ? "1 Datei konnte nicht gelesen werden" : `${n} Dateien konnten nicht gelesen werden`,
+    howToUse:
+      "Schalte im Eingabefeld den Buch-Knopf ein und frag nach deinen Dokumenten. Neue und geänderte Dateien kommen beim Start von ZAP oder mit „Jetzt aktualisieren“ dazu.",
+    errors: {
+      model_missing: "Das Suchmodell ist nicht installiert. Lade es oben herunter.",
+      ollama_down: "Ollama läuft nicht.",
+    },
+    fileErrors: {
+      pdf_unreadable: "PDF ohne lesbaren Text (z. B. ein Scan)",
+    },
+    setup: "Wissen: Ordner einrichten",
+    on: "Wissen an: ZAP durchsucht deine Wissensordner",
+    off: "Wissen aus",
+    searching: (q: string) => `Durchsuche deine Dokumente: „${q}“`,
+    searched: (q: string) => `Deine Dokumente durchsucht: „${q}“`,
+    sources: (n: number) => (n === 1 ? "1 Datei" : `${n} Dateien`),
+    nothing: "nichts gefunden",
+  },
+
   toast: {
     copied: "Kopiert.",
     nothingToCopy: "Noch keine Antwort zum Kopieren.",

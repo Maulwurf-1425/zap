@@ -6,6 +6,7 @@ import {
   ScanEye,
   Activity,
   Ban,
+  BookOpen,
   ChevronDown,
   FilePen,
   FilePlus,
@@ -56,6 +57,7 @@ function shortPath(path: string): string {
 
 const ICONS: Record<string, LucideIcon> = {
   web_search: Search,
+  search_knowledge: BookOpen,
   fetch_page: Globe,
   search_files: FileSearch,
   list_directory: FolderOpen,
@@ -97,6 +99,8 @@ function label(a: ToolActivity): string {
     }
     case "web_search":
       return done ? t.web.searched(a.input) : t.web.searching(a.input);
+    case "search_knowledge":
+      return done ? t.knowledge.searched(a.input) : t.knowledge.searching(a.input);
     case "search_files":
       return done ? f.searched(a.input) : f.searching(a.input);
     case "list_directory":
@@ -160,6 +164,8 @@ function note(a: ToolActivity): string | null {
   if (kind === "exit") return t.zaps.cards.exit(value ?? "?");
   if (a.status === "error") return errorText(a.error);
   if (kind === "count") return t.zaps.cards.count(Number(value));
+  if (a.name === "search_knowledge")
+    return a.sources.length > 0 ? t.knowledge.sources(a.sources.length) : t.knowledge.nothing;
   if (a.name === "web_search") {
     if (kind === "starting") return value === "docker" ? t.web.startingDocker : t.web.startingSearxng;
     const parts = a.sources.length > 0 ? [t.web.sources(a.sources.length)] : [];
@@ -218,7 +224,8 @@ function StatusIcon({ activity: a }: { activity: ToolActivity }) {
 
 function ToolCard({ activity: a }: { activity: ToolActivity }) {
   const [open, setOpen] = useState(false);
-  const showSources = a.sources.length > 0 && a.name === "web_search";
+  const knowledge = a.name === "search_knowledge";
+  const showSources = a.sources.length > 0 && (a.name === "web_search" || knowledge);
   const command = a.name === "run_command";
   // Command output also matters when the command failed.
   const showPreview =
@@ -274,10 +281,12 @@ function ToolCard({ activity: a }: { activity: ToolActivity }) {
                 className="flex min-w-0 items-baseline gap-2 rounded-sm py-0.5 text-fg hover:underline hover:decoration-[var(--link)]"
                 onClick={async (e) => {
                   e.preventDefault();
-                  if (!(await openExternal(s.url))) toast(t.chat.linkFailed);
+                  if (knowledge) {
+                    await api.knowledgeOpen(s.url).catch(() => toast(t.errors.generic));
+                  } else if (!(await openExternal(s.url))) toast(t.chat.linkFailed);
                 }}
               >
-                <span className="flex-none text-fg-subtle">{host(s.url)}</span>
+                <span className="flex-none text-fg-subtle">{knowledge ? "📄" : host(s.url)}</span>
                 <span className="min-w-0 truncate">{s.title}</span>
               </a>
             </li>

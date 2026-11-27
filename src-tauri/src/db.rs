@@ -164,6 +164,26 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE zaps ADD COLUMN time_limit INTEGER;",
     // 13: ZAP avatars (DiceBear style + seed, JSON)
     "ALTER TABLE zaps ADD COLUMN avatar TEXT;",
+    // 14: knowledge folders: indexed files and their passages with embeddings
+    "CREATE TABLE knowledge_files (
+         path TEXT PRIMARY KEY,
+         folder TEXT NOT NULL,
+         mtime INTEGER NOT NULL,
+         size INTEGER NOT NULL,
+         chunks INTEGER NOT NULL DEFAULT 0,
+         status TEXT NOT NULL,
+         error TEXT,
+         indexed_at INTEGER NOT NULL
+     );
+     CREATE TABLE knowledge_chunks (
+         id INTEGER PRIMARY KEY,
+         path TEXT NOT NULL,
+         idx INTEGER NOT NULL,
+         text TEXT NOT NULL,
+         embedding BLOB NOT NULL,
+         model TEXT NOT NULL
+     );
+     CREATE INDEX knowledge_chunks_by_path ON knowledge_chunks(path);",
 ];
 
 pub fn schema_version(conn: &Connection) -> AppResult<i64> {
@@ -350,6 +370,12 @@ pub struct Settings {
     pub quick_ask_enabled: bool,
     /// E.g. "Alt+Space".
     pub quick_ask_shortcut: String,
+    /// Folders whose documents ZAP can search (knowledge).
+    pub knowledge_folders: Vec<String>,
+    /// Ollama embedding model for the knowledge folders.
+    pub knowledge_model: String,
+    /// Offer the knowledge search in chats (composer switch).
+    pub knowledge_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -414,6 +440,9 @@ impl Default for Settings {
             cloud_providers: Vec::new(),
             quick_ask_enabled: true,
             quick_ask_shortcut: "Alt+Space".into(),
+            knowledge_folders: Vec::new(),
+            knowledge_model: crate::knowledge::DEFAULT_MODEL.into(),
+            knowledge_enabled: false,
         }
     }
 }

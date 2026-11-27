@@ -57,6 +57,9 @@ export const DEFAULT_SETTINGS: Settings = {
   cloud_providers: [],
   quick_ask_enabled: true,
   quick_ask_shortcut: "Alt+Space",
+  knowledge_folders: [],
+  knowledge_model: "nomic-embed-text",
+  knowledge_enabled: false,
 };
 
 /** Fields the appearance tab's reset button restores. */

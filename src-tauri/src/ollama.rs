@@ -30,6 +30,28 @@ pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 // Process management
 // ---------------------------------------------------------------------------
 
+/// Whether a model is downloaded (`name` with or without its tag).
+pub async fn is_installed(http: &reqwest::Client, name: &str) -> bool {
+    let Ok(resp) = http.get(format!("{BASE_URL}/api/tags")).send().await else {
+        return false;
+    };
+    let Ok(tags) = resp.json::<TagsResponse>().await else {
+        return false;
+    };
+    tags.models
+        .iter()
+        .any(|m| m.name == name || m.name.split(':').next() == Some(name))
+}
+
+/// Embedding models can't chat: keep them out of the model pickers.
+pub fn is_embedding_model(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("embed")
+        || n.starts_with("all-minilm")
+        || n.starts_with("bge-")
+        || n.starts_with("paraphrase-")
+}
+
 /// A model Ollama has in memory (`/api/ps`).
 pub struct Loaded {
     pub name: String,
@@ -376,6 +398,7 @@ impl ChatProvider for Ollama<'_> {
         let mut models: Vec<ModelInfo> = tags
             .models
             .into_iter()
+            .filter(|m| !is_embedding_model(&m.name))
             .map(|m| ModelInfo {
                 id: model_key(ProviderKind::Ollama, &m.name),
                 name: m.name,

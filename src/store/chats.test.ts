@@ -107,7 +107,7 @@ describe("chat store", () => {
         { role: "system", content: "Sei kurz." },
         { role: "user", content: "Hallo" },
       ],
-      { temperature: 0.7, num_ctx: 4096, web: false, files: false, zaps: false },
+      { temperature: 0.7, num_ctx: 4096, web: false, files: false, zaps: false, knowledge: false },
     );
     expect(useChats.getState().generating[chatId]).toBeDefined();
 

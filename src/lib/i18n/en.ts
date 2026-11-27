@@ -1136,6 +1136,42 @@ export const en = {
     } as Record<string, string>,
   },
 
+  knowledge: {
+    tab: "Knowledge",
+    title: "Knowledge folders",
+    intro:
+      "Give ZAP folders with your PDFs, documents and notes. ZAP reads them on your PC and answers questions about them, with the files as sources. Nothing leaves your PC.",
+    types: "Reads PDF, Word (.docx), text and Markdown files, also in subfolders.",
+    addFolder: "Add folder",
+    removeFolder: "Remove folder",
+    model: "Search model",
+    needsOllama: "Needs Ollama running: it turns your texts into searchable meaning.",
+    modelReady: "Installed. It runs locally in Ollama.",
+    modelMissing: "Not installed yet (about 270 MB). Needed once for the knowledge search.",
+    download: "Download",
+    index: "Index",
+    indexing: (done: number, total: number) => `Reading files … ${done} of ${total}`,
+    indexed: (files: string, passages: string) => `${files} files, ${passages} passages searchable`,
+    reindex: "Update now",
+    failed: (n: number) => (n === 1 ? "1 file couldn't be read" : `${n} files couldn't be read`),
+    howToUse:
+      "Turn on the book button in the chat box, then ask about your documents. New and changed files are picked up when ZAP starts or when you press “Update now”.",
+    errors: {
+      model_missing: "The search model isn't installed. Download it above.",
+      ollama_down: "Ollama isn't running.",
+    } as Record<string, string>,
+    fileErrors: {
+      pdf_unreadable: "PDF without readable text (e.g. a scan)",
+    } as Record<string, string>,
+    setup: "Knowledge: set up folders",
+    on: "Knowledge on: ZAP searches your knowledge folders",
+    off: "Knowledge off",
+    searching: (q: string) => `Searching your documents: “${q}”`,
+    searched: (q: string) => `Searched your documents: “${q}”`,
+    sources: (n: number) => (n === 1 ? "1 file" : `${n} files`),
+    nothing: "nothing found",
+  },
+
   toast: {
     copied: "Copied.",
     nothingToCopy: "No reply to copy yet.",

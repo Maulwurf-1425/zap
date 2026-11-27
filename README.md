@@ -41,8 +41,14 @@ fast chat window, so you can use them the way you'd use ChatGPT, just offline an
 - **Optional file access:** let the model search, read and edit files on your PC. Every change asks
   for your OK first and shows exactly what will change. Mention any file with `@name`.
 - **ZAPs:** small agents that do a task by themselves in the background: run PowerShell commands,
-  open apps, research the web and work with files. Start them by hand, on a schedule or just ask
-  the chat. Every command can require your OK, destructive ones always do.
+  open and control apps, research the web and work with files. Start them by hand, on a schedule,
+  when a new file lands in a folder, or just ask the chat. Every command can require your OK,
+  destructive ones always do.
+- **Quick ask:** press Alt+Space in any app to ask ZAP in a small window, without opening it.
+- **Knowledge folders:** let ZAP answer questions about your PDFs, Word files and notes, with the
+  files as sources. The search runs on your PC.
+- **Compare models:** the same question to several models, answers side by side with speed and
+  tokens.
 - **Resource monitor:** press F5 anywhere to see CPU, RAM, graphics card and tokens used by ZAP and
   its engines, and unload models you don't need.
 - **Organized:** chat groups with colors, pinning, full-text search across all chats, and Markdown
@@ -145,6 +151,7 @@ that really come from this project. You can turn the automatic check off, or che
 | Ctrl+,              | Settings                            |
 | Ctrl+Shift+C        | Copy the last answer                |
 | Ctrl+↑ / ↓          | Previous / next chat                |
+| Alt+Space           | Quick ask (from any app)            |
 | F5                  | Resource monitor                    |
 | Esc                 | Stop the answer / close             |
 | Enter / Shift+Enter | Send / new line                     |

@@ -4,6 +4,40 @@ Each release has a `## <version>` heading, optionally followed by ` – <update 
 and one `### English` and one `### Deutsch` section. The release workflow publishes the
 section of the tagged version, and ZAP shows it before and after updating.
 
+## 0.6.0
+
+### English
+
+- **Quick ask from anywhere:** press Alt+Space in any app and a small ZAP window opens on top. Ask,
+  read the answer, ask follow-ups, and close it with Esc, or keep the exchange as a chat with
+  Ctrl+Enter. The shortcut can be changed under Settings → General.
+- **Knowledge folders:** give ZAP folders with your PDFs, Word files and notes. ZAP makes them
+  searchable by meaning, right on your PC (with a small Ollama model), and answers questions about
+  them with the files as sources. Turn it on with the book button in the chat box.
+- **ZAP triggers:** a ZAP can now start by itself when a new file lands in a folder, e.g. to sort
+  new downloads. It waits until a download is complete, and several files run one after another.
+- **Control apps:** ZAPs can now read windows, click buttons, type and press shortcuts in other
+  apps. Clicking and typing go through the same approval as commands.
+- **Compare models:** ask several models the same question and see their answers side by side,
+  with time to the first word, speed and tokens. Open it with the columns button in the sidebar.
+
+### Deutsch
+
+- **Schnellfrage von überall:** Drück Alt+Leertaste in jeder App, und ein kleines ZAP-Fenster
+  öffnet sich darüber. Frag, lies die Antwort, frag nach und schließ es mit Esc, oder mach mit
+  Strg+Enter einen Chat daraus. Das Tastenkürzel lässt sich unter Einstellungen → Allgemein ändern.
+- **Wissensordner:** Gib ZAP Ordner mit deinen PDFs, Word-Dateien und Notizen. ZAP macht sie nach
+  Bedeutung durchsuchbar, direkt auf deinem PC (mit einem kleinen Ollama-Modell), und beantwortet
+  Fragen dazu mit den Dateien als Quellen. Einschalten mit dem Buch-Knopf im Eingabefeld.
+- **ZAP-Auslöser:** Ein ZAP kann jetzt von selbst starten, wenn eine neue Datei in einem Ordner
+  landet, z. B. um neue Downloads zu sortieren. Er wartet, bis ein Download fertig ist, und mehrere
+  Dateien laufen nacheinander.
+- **Apps steuern:** ZAPs können jetzt Fenster lesen, Knöpfe klicken, tippen und Tastenkürzel in
+  anderen Apps drücken. Klicken und Tippen laufen über dieselbe Freigabe wie Befehle.
+- **Modelle vergleichen:** Stell mehreren Modellen dieselbe Frage und sieh ihre Antworten
+  nebeneinander, mit Zeit bis zum ersten Wort, Tempo und Tokens. Zu finden über den Spalten-Knopf in
+  der Seitenleiste.
+
 ## 0.5.1 – Cloud Models
 
 ### English

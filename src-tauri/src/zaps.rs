@@ -70,6 +70,8 @@ fn emit_run(app: &AppHandle, run: &ZapRun) {
 
 fn emit_changed(app: &AppHandle) {
     let _ = app.emit("zap://changed", ());
+    // Folder triggers follow the ZAPs.
+    crate::triggers::sync(app);
 }
 
 // --- Notifications -------------------------------------------------------------
@@ -294,7 +296,7 @@ fn notify_finished(app: &AppHandle, zap: &Zap, run: &ZapRun) {
 /// The system prompt of a run.
 fn task_prompt(zap: &Zap) -> String {
     let t = &zap.tools;
-    let has_tools = t.web || t.files || t.terminal || t.apps;
+    let has_tools = t.web || t.files || t.terminal || t.apps || t.control;
     let mut prompt = format!(
         "You are the ZAP \"{}\", a small agent that works by itself on the user's Windows PC. Today is {}.\n\n\
 Your task:\n{}\n\n",
@@ -418,7 +420,9 @@ async fn execute(app: &AppHandle, job: Job) {
         web: t.web,
         files: t.files,
         terminal: t.terminal,
-        apps: t.apps,
+        // Controlling apps opens them first, so it brings open_app along.
+        apps: t.apps || t.control,
+        control: t.control,
         max_rounds: Some(zap.max_steps),
         ..Default::default()
     };
@@ -435,7 +439,7 @@ async fn execute(app: &AppHandle, job: Job) {
     let (provider, model_name) = engine::route(&state, &model);
     let mut used = None;
     let mut log = RunLog::default();
-    let needs_tools = t.web || t.files || t.terminal || t.apps;
+    let needs_tools = t.web || t.files || t.terminal || t.apps || t.control;
     let result = if needs_tools
         && !provider
             .capabilities(model_name)
@@ -548,6 +552,13 @@ fn clean_schedule(s: &mut ZapSchedule) {
             s.days.dedup();
         }
         "startup" => {}
+        "folder" => {
+            s.folder = s.folder.trim().to_string();
+            s.pattern = s.pattern.trim().chars().take(200).collect();
+            if !std::path::Path::new(&s.folder).is_dir() {
+                *s = ZapSchedule::default();
+            }
+        }
         _ => *s = ZapSchedule::default(),
     }
 }
@@ -644,11 +655,13 @@ pub fn tool_specs() -> Vec<ToolSpec> {
                     "instructions": { "type": "string", "description": "The task, written as clear instructions for the agent: goal, steps, rules, what to report. In the user's language." },
                     "tools": {
                         "type": "array",
-                        "items": { "type": "string", "enum": ["web", "files", "terminal", "apps"] },
-                        "description": "What it may use: web (search and read pages), files (search/read/write files), terminal (PowerShell commands), apps (open apps, files and links). Only what the task needs."
+                        "items": { "type": "string", "enum": ["web", "files", "terminal", "apps", "control"] },
+                        "description": "What it may use: web (search and read pages), files (search/read/write files), terminal (PowerShell commands), apps (open apps, files and links), control (read, click and type in other apps' windows). Only what the task needs."
                     },
                     "max_steps": { "type": "integer", "description": "Upper bound for its steps (default 20, max 60)" },
-                    "schedule": { "type": "string", "enum": ["off", "startup", "interval", "daily"], "description": "Optional: start by itself when ZAP starts, every N minutes, or daily at a time. Only when the user asks for it." },
+                    "schedule": { "type": "string", "enum": ["off", "startup", "interval", "daily", "folder"], "description": "Optional: start by itself when ZAP starts, every N minutes, daily at a time, or when a new file lands in a folder. Only when the user asks for it." },
+                    "folder": { "type": "string", "description": "For schedule \"folder\": absolute path of the folder to watch, e.g. the Downloads folder in the user profile" },
+                    "pattern": { "type": "string", "description": "For schedule \"folder\": optional file patterns like \"*.pdf; *.jpg\" (empty = every new file)" },
                     "every_minutes": { "type": "integer", "description": "For schedule \"interval\": minutes between runs (at least 5)" },
                     "time": { "type": "string", "description": "For schedule \"daily\": local time as HH:MM, e.g. 08:00" },
                     "weekdays": { "type": "array", "items": { "type": "integer" }, "description": "For schedule \"daily\": only these days, 0 = Monday … 6 = Sunday. Omit for every day." }
@@ -723,6 +736,7 @@ fn tool_names(t: &ZapTools) -> String {
         (t.files, "files"),
         (t.terminal, "terminal"),
         (t.apps, "apps"),
+        (t.control, "control"),
     ]
     .into_iter()
     .filter_map(|(on, n)| on.then_some(n))
@@ -774,6 +788,8 @@ fn schedule_from(args: &serde_json::Value) -> ZapSchedule {
                     .collect()
             })
             .unwrap_or_default(),
+        folder: args["folder"].as_str().unwrap_or_default().to_string(),
+        pattern: args["pattern"].as_str().unwrap_or_default().to_string(),
     };
     clean_schedule(&mut s);
     s
@@ -862,6 +878,7 @@ pub async fn run_tool(
                     files: has("files"),
                     terminal: has("terminal"),
                     apps: has("apps"),
+                    control: has("control"),
                 },
                 max_steps: args["max_steps"]
                     .as_u64()
@@ -1050,6 +1067,28 @@ mod tests {
         assert!(p.contains("Nobody can answer"));
         assert_eq!(tool_names(&zap.tools), "terminal");
         assert_eq!(tool_names(&ZapTools::default()), "none");
+    }
+
+    #[test]
+    fn folder_schedules_need_an_existing_folder() {
+        let dir = std::env::temp_dir();
+        let mut s = ZapSchedule {
+            kind: "folder".into(),
+            folder: format!(" {} ", dir.display()),
+            pattern: " *.pdf ".into(),
+            ..Default::default()
+        };
+        clean_schedule(&mut s);
+        assert_eq!(s.kind, "folder");
+        assert_eq!(s.folder, dir.display().to_string());
+        assert_eq!(s.pattern, "*.pdf");
+        let mut gone = ZapSchedule {
+            kind: "folder".into(),
+            folder: "Z:/does/not/exist".into(),
+            ..Default::default()
+        };
+        clean_schedule(&mut gone);
+        assert_eq!(gone.kind, "off");
     }
 
     #[test]

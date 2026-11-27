@@ -1,6 +1,9 @@
 import { useState } from "react";
 import {
   AppWindow,
+  Keyboard,
+  MousePointerClick,
+  ScanEye,
   Activity,
   Ban,
   ChevronDown,
@@ -34,7 +37,7 @@ import { scheduleText, useZaps } from "../store/zaps";
 /** Where the cards live: a chat reply or a ZAP run (changes "allow all"). */
 export type ToolScope = "chat" | "run";
 
-const SYSTEM_TOOLS = new Set(["run_command", "open_app"]);
+const SYSTEM_TOOLS = new Set(["run_command", "open_app", "ui_click", "ui_type", "ui_keys", "ui_read", "ui_windows"]);
 const ZAP_TOOLS = new Set(["list_zaps", "create_zap", "start_zap", "stop_zap", "zap_status", "delete_zap"]);
 
 function host(url: string): string {
@@ -64,6 +67,11 @@ const ICONS: Record<string, LucideIcon> = {
   delete_file: Trash2,
   run_command: SquareTerminal,
   open_app: AppWindow,
+  ui_windows: AppWindow,
+  ui_read: ScanEye,
+  ui_click: MousePointerClick,
+  ui_type: Keyboard,
+  ui_keys: Keyboard,
   list_zaps: List,
   create_zap: Sparkles,
   start_zap: Play,
@@ -112,6 +120,16 @@ function label(a: ToolActivity): string {
       return t.zaps.cards.command(shortCommand(a.input));
     case "open_app":
       return done ? t.zaps.cards.opened(a.input) : t.zaps.cards.opening(a.input);
+    case "ui_windows":
+      return t.zaps.cards.uiWindows;
+    case "ui_read":
+      return t.zaps.cards.uiRead(a.input);
+    case "ui_click":
+      return t.zaps.cards.uiClick(a.preview?.split(" → ")[1] ?? a.input);
+    case "ui_type":
+      return t.zaps.cards.uiType(a.input);
+    case "ui_keys":
+      return t.zaps.cards.uiKeys(a.preview?.split(" ⌨ ")[1] ?? a.input);
     case "list_zaps":
       return done ? t.zaps.cards.listed : t.zaps.cards.listing;
     case "create_zap":
@@ -469,6 +487,7 @@ const TOOL_LABELS = (): Record<string, string> => ({
   files: t.zaps.tools.files,
   terminal: t.zaps.tools.terminal,
   apps: t.zaps.tools.apps,
+  control: t.zaps.tools.control,
 });
 
 /** The chat model wants to create or delete a ZAP. */

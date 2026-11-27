@@ -66,11 +66,11 @@ export function blankZap(): Zap {
     color: null,
     instructions: "",
     model: null,
-    tools: { web: true, files: false, terminal: false, apps: false },
+    tools: { web: true, files: false, terminal: false, apps: false, control: false },
     max_steps: DEFAULT_STEPS,
     created_at: 0,
     updated_at: 0,
-    schedule: { kind: "off", every_min: 60, time: "08:00", days: [] },
+    schedule: { kind: "off", every_min: 60, time: "08:00", days: [], folder: "", pattern: "" },
     // Off by default: much faster and fewer tokens for most tasks.
     thinking: false,
     token_budget: null,
@@ -106,7 +106,7 @@ export function liveRunOf(live: Record<string, LiveRun>, zapId: string): LiveRun
 /** "Runs daily at 08:00", "Runs every 2 h", … or null when off. */
 /** Whether a ZAP starts by itself (older ZAPs may have an empty kind). */
 export function isScheduled(zap: Pick<Zap, "schedule">): boolean {
-  return ["startup", "interval", "daily"].includes(zap.schedule.kind);
+  return ["startup", "interval", "daily", "folder"].includes(zap.schedule.kind);
 }
 
 export function scheduleText(zap: Pick<Zap, "schedule">): string | null {
@@ -114,6 +114,10 @@ export function scheduleText(zap: Pick<Zap, "schedule">): string | null {
   switch (s.kind) {
     case "startup":
       return t.zaps.scheduleStartup;
+    case "folder": {
+      const folder = s.folder.split(/[\\/]/).filter(Boolean).pop() ?? s.folder;
+      return s.pattern.trim() ? t.zaps.scheduleFolderPattern(folder, s.pattern.trim()) : t.zaps.scheduleFolder(folder);
+    }
     case "interval":
       return t.zaps.scheduleEvery(t.zaps.duration(s.every_min));
     case "daily": {

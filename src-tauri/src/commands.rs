@@ -21,7 +21,7 @@ use crate::provider::{
 use crate::state::{lock, AppState, Decision};
 use crate::tools;
 use crate::web;
-use crate::{file_tools, files, installer, lmstudio, system_tools, zaps};
+use crate::{file_tools, files, installer, lmstudio, system_tools, ui_control, zaps};
 
 const SEARCH_LIMIT: usize = 50;
 const TITLE_INPUT_CHARS: usize = 1200;
@@ -460,6 +460,10 @@ pub async fn run_agent(
     }
     if options.terminal || options.apps {
         prompts.push(system_tools::system_prompt(options.terminal, options.apps));
+    }
+    if options.control {
+        specs.extend(ui_control::tool_specs());
+        prompts.push(ui_control::system_prompt());
     }
     if options.zaps {
         specs.extend(zaps::tool_specs());
@@ -1078,6 +1082,20 @@ async fn pick_save_path(
             let _ = tx.send(path);
         });
     rx.await.ok().flatten().and_then(|p| p.into_path().ok())
+}
+
+/// Lets the user pick a folder (e.g. for a ZAP trigger); `None` if cancelled.
+#[tauri::command]
+pub async fn pick_folder(app: AppHandle) -> Option<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |path| {
+        let _ = tx.send(path);
+    });
+    rx.await
+        .ok()
+        .flatten()
+        .and_then(|p| p.into_path().ok())
+        .map(|p| p.display().to_string())
 }
 
 async fn pick_open_path(

@@ -327,9 +327,11 @@ export interface ZapTools {
   terminal: boolean;
   /** Open apps, files and links. */
   apps: boolean;
+  /** Read, click and type in other apps' windows. */
+  control: boolean;
 }
 
-export type ZapScheduleKind = "off" | "startup" | "interval" | "daily";
+export type ZapScheduleKind = "off" | "startup" | "interval" | "daily" | "folder";
 
 /** When a ZAP starts by itself (see src-tauri/src/schedule.rs). */
 export interface ZapSchedule {
@@ -340,6 +342,10 @@ export interface ZapSchedule {
   time: string;
   /** "daily": 0 = Monday … 6 = Sunday; empty = every day. */
   days: number[];
+  /** "folder": watched folder. */
+  folder: string;
+  /** "folder": file patterns like "*.pdf; *.jpg" (empty = all files). */
+  pattern: string;
 }
 
 /** A small agent that works on a task by itself (see src-tauri/src/zaps.rs). */
@@ -383,7 +389,7 @@ export interface ZapRun {
   id: string;
   zap_id: string;
   input: string | null;
-  source: "manual" | "chat" | "schedule";
+  source: "manual" | "chat" | "schedule" | "trigger";
   status: ZapRunStatus;
   /** Everything the ZAP wrote (its report). */
   output: string;
@@ -704,6 +710,7 @@ export const api = {
   zapStart: (zapId: string, input: string | null, model: string | null) =>
     invoke<ZapRun>("zap_start", { zapId, input, model }),
   zapAvatarSave: (zapId: string, pngBase64: string | null) => invoke<void>("zap_avatar_save", { zapId, pngBase64 }),
+  pickFolder: () => invoke<string | null>("pick_folder"),
   zapStop: (runId: string) => invoke<void>("zap_stop", { runId }),
 
   getSettings: () => invoke<Settings>("get_settings"),

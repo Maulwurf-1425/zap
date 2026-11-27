@@ -128,7 +128,7 @@ pub fn is_critical(command: &str) -> bool {
 }
 
 /// Waits for the user's decision unless the permission mode allows it.
-async fn approve(
+pub(crate) async fn approve(
     state: &AppState,
     ctx: &ToolCtx<'_>,
     activity: &mut ToolActivity,

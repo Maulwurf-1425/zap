@@ -56,6 +56,7 @@ impl ToolActivity {
             web::TOOL_FETCH => args["url"].as_str(),
             system_tools::RUN => args["command"].as_str(),
             system_tools::OPEN => args["target"].as_str(),
+            n if crate::ui_control::NAMES.contains(&n) => args["window"].as_str(),
             n if zaps::NAMES.contains(&n) => args["zap"].as_str().or_else(|| args["name"].as_str()),
             _ => args["path"].as_str().or_else(|| args["source"].as_str()),
         };
@@ -356,6 +357,8 @@ pub async fn run_any(
         file_tools::run(state, ctx, call, activity).await
     } else if system_tools::NAMES.contains(&name) {
         system_tools::run(state, ctx, call, activity).await
+    } else if crate::ui_control::NAMES.contains(&name) {
+        crate::ui_control::run(state, ctx, call, activity).await
     } else if zaps::NAMES.contains(&name) {
         zaps::run_tool(state, ctx, call, activity).await
     } else {

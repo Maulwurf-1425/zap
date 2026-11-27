@@ -3,6 +3,7 @@ import {
   CalendarClock,
   ChevronDown,
   Dices,
+  FolderOpen,
   Coins,
   Cpu,
   ListChecks,
@@ -23,6 +24,7 @@ import { ToolCards } from "./ToolCards";
 import { AVATAR_STYLE_IDS, randomSeed, useAvatarUri } from "../lib/avatars";
 import { DotBolt } from "./Brand";
 import {
+  api,
   modelLabel,
   parseStats,
   type Zap,
@@ -51,8 +53,8 @@ import {
 
 /** ZAP colors: the same mid tones as chat groups. */
 const ZAP_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899"];
-const TOOL_KEYS: (keyof ZapTools)[] = ["web", "files", "terminal", "apps"];
-const SCHEDULE_KINDS: ZapScheduleKind[] = ["off", "startup", "interval", "daily"];
+const TOOL_KEYS: (keyof ZapTools)[] = ["web", "files", "terminal", "apps", "control"];
+const SCHEDULE_KINDS: ZapScheduleKind[] = ["off", "startup", "interval", "daily", "folder"];
 /** Minutes between scheduled runs. */
 const INTERVALS = [5, 10, 15, 30, 60, 120, 240, 480, 720, 1440];
 const TOKEN_BUDGETS = [5_000, 10_000, 25_000, 50_000, 100_000];
@@ -648,6 +650,40 @@ function EditorForm({ initial, onClose }: { initial: Zap; onClose: () => void })
             </div>
           )}
           {schedule.kind === "daily" && <p className="-mt-1 text-caption text-fg-muted">{e.daysHint}</p>}
+          {schedule.kind === "folder" && (
+            <div className="flex flex-col gap-3">
+              <Field label={e.folder}>
+                <div className="flex gap-2">
+                  <input
+                    className="input min-w-0 flex-1 font-mono text-caption"
+                    aria-label={e.folder}
+                    value={schedule.folder}
+                    placeholder={e.folderPlaceholder}
+                    spellCheck={false}
+                    onChange={(ev) => setSchedule({ folder: ev.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary h-11 flex-none"
+                    onClick={() => void api.pickFolder().then((folder) => folder && setSchedule({ folder }))}
+                  >
+                    <FolderOpen size={16} strokeWidth={1.75} aria-hidden="true" />
+                    {e.pickFolder}
+                  </button>
+                </div>
+              </Field>
+              <Field label={e.pattern} htmlFor="zap-pattern" hint={e.patternHint}>
+                <input
+                  id="zap-pattern"
+                  className="input font-mono"
+                  value={schedule.pattern}
+                  placeholder="*.pdf; *.jpg"
+                  spellCheck={false}
+                  onChange={(ev) => setSchedule({ pattern: ev.target.value })}
+                />
+              </Field>
+            </div>
+          )}
           {schedule.kind !== "off" && <p className="text-caption text-fg-muted">{e.scheduleHint}</p>}
         </div>
 

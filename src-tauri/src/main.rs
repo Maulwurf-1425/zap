@@ -23,6 +23,8 @@ mod state;
 mod system_tools;
 mod tools;
 mod tray;
+mod triggers;
+mod ui_control;
 mod versions;
 mod voice;
 mod web;
@@ -81,6 +83,7 @@ fn main() {
             tauri::async_runtime::spawn(engine::supervise(app.handle().clone()));
             zaps::init(app.handle());
             schedule::init(app.handle());
+            triggers::init(app.handle());
             // With file access on, keep the file index ready (and live) from the start.
             if db::get_settings(&app.state::<AppState>().db()).is_ok_and(|s| s.file_tools_enabled) {
                 file_tools::ensure_index(app.handle());
@@ -174,6 +177,7 @@ fn main() {
             zaps::zap_start,
             zaps::zap_stop,
             zaps::zap_avatar_save,
+            commands::pick_folder,
             commands::get_settings,
             commands::set_settings,
         ])

@@ -948,6 +948,8 @@ pub struct ZapTools {
     pub terminal: bool,
     /// Open apps, files and links.
     pub apps: bool,
+    /// Read, click and type in other apps' windows (UI Automation).
+    pub control: bool,
 }
 
 /// A cloud provider the user added (see `cloud.rs`).
@@ -969,7 +971,7 @@ pub struct CloudConnection {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct ZapSchedule {
-    /// "off" | "startup" | "interval" | "daily"
+    /// "off" | "startup" | "interval" | "daily" | "folder"
     pub kind: String,
     /// "interval": minutes between runs.
     pub every_min: u32,
@@ -977,6 +979,10 @@ pub struct ZapSchedule {
     pub time: String,
     /// "daily": weekdays (0 = Monday … 6 = Sunday); empty = every day.
     pub days: Vec<u8>,
+    /// "folder": the watched folder.
+    pub folder: String,
+    /// "folder": file patterns like "*.pdf; *.jpg" (empty = all files).
+    pub pattern: String,
 }
 
 impl Default for ZapSchedule {
@@ -986,6 +992,8 @@ impl Default for ZapSchedule {
             every_min: 60,
             time: "08:00".into(),
             days: Vec::new(),
+            folder: String::new(),
+            pattern: String::new(),
         }
     }
 }

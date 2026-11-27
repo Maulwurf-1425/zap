@@ -785,6 +785,8 @@ export const de: Strings = {
   ],
 
   zaps: {
+    scheduleFolder: (folder: string) => `Startet bei neuen Dateien in ${folder}`,
+    scheduleFolderPattern: (folder: string, pattern: string) => `Startet bei neuen ${pattern}-Dateien in ${folder}`,
     scheduleStartup: "Startet, wenn ZAP startet",
     scheduleEvery: (interval: string) => `Läuft alle ${interval}`,
     scheduleDaily: (time: string, days: string) => `Läuft ${days} um ${time}`,
@@ -832,6 +834,7 @@ export const de: Strings = {
       stopped: "Gestoppt",
     },
     source: {
+      trigger: "von einer neuen Datei gestartet",
       schedule: "nach Zeitplan gestartet",
       manual: "von dir gestartet",
       chat: "aus dem Chat gestartet",
@@ -865,8 +868,16 @@ export const de: Strings = {
       terminalHint: "PowerShell-Befehle ausführen",
       apps: "Apps",
       appsHint: "Apps, Dateien, Ordner und Links öffnen",
+      control: "Apps steuern",
+      controlHint: "Fenster lesen, Knöpfe klicken und in anderen Apps tippen",
     },
     editor: {
+      folder: "Ordner",
+      folderPlaceholder: "z. B. dein Download-Ordner",
+      pickFolder: "Wählen …",
+      pattern: "Nur diese Dateien (optional)",
+      patternHint:
+        "Mehrere Muster mit ; trennen – leer heißt jede neue Datei. Der ZAP bekommt den Pfad der Datei und startet, sobald sie vollständig ist.",
       avatar: "Avatar",
       noAvatar: "ZAP-Blitz",
       reroll: "Neu würfeln",
@@ -885,6 +896,7 @@ export const de: Strings = {
       },
       schedule: "Selbst starten",
       scheduleKinds: {
+        folder: "Neue Datei",
         off: "Nur von Hand",
         startup: "Wenn ZAP startet",
         interval: "Alle …",
@@ -928,6 +940,11 @@ export const de: Strings = {
       create: "ZAP anlegen",
     },
     cards: {
+      uiWindows: "Offene Fenster angesehen",
+      uiRead: (w: string) => `Fenster „${w}“ gelesen`,
+      uiClick: (el: string) => `„${el}“ klicken`,
+      uiType: (w: string) => `In „${w}“ tippen`,
+      uiKeys: (k: string) => `${k} drücken`,
       command: (c: string) => `PowerShell: ${c}`,
       opening: (x: string) => `${x} öffnen`,
       opened: (x: string) => `${x} geöffnet`,

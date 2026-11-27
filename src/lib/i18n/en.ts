@@ -779,6 +779,8 @@ export const en = {
   ],
 
   zaps: {
+    scheduleFolder: (folder: string) => `Starts for new files in ${folder}`,
+    scheduleFolderPattern: (folder: string, pattern: string) => `Starts for new ${pattern} files in ${folder}`,
     scheduleStartup: "Starts when ZAP starts",
     scheduleEvery: (interval: string) => `Runs every ${interval}`,
     scheduleDaily: (time: string, days: string) => `Runs ${days} at ${time}`,
@@ -826,6 +828,7 @@ export const en = {
       stopped: "Stopped",
     } as Record<string, string>,
     source: {
+      trigger: "started by a new file",
       schedule: "started by its schedule",
       manual: "started by you",
       chat: "started from the chat",
@@ -859,8 +862,16 @@ export const en = {
       terminalHint: "Run PowerShell commands",
       apps: "Apps",
       appsHint: "Open apps, files, folders and links",
+      control: "Control apps",
+      controlHint: "Read windows, click buttons and type in other apps",
     },
     editor: {
+      folder: "Folder",
+      folderPlaceholder: "e.g. your Downloads folder",
+      pickFolder: "Choose …",
+      pattern: "Only these files (optional)",
+      patternHint:
+        "Separate several patterns with ; – empty means every new file. The ZAP gets the file's path and starts once the file is complete.",
       avatar: "Avatar",
       noAvatar: "ZAP bolt",
       reroll: "Roll again",
@@ -879,6 +890,7 @@ export const en = {
       } as Record<string, string>,
       schedule: "Start by itself",
       scheduleKinds: {
+        folder: "New file",
         off: "Only by hand",
         startup: "When ZAP starts",
         interval: "Every …",
@@ -922,6 +934,11 @@ export const en = {
       create: "Create ZAP",
     },
     cards: {
+      uiWindows: "Looked at the open windows",
+      uiRead: (w: string) => `Read window “${w}”`,
+      uiClick: (el: string) => `Click “${el}”`,
+      uiType: (w: string) => `Type in “${w}”`,
+      uiKeys: (k: string) => `Press ${k}`,
       command: (c: string) => `PowerShell: ${c}`,
       opening: (x: string) => `Open ${x}`,
       opened: (x: string) => `Opened ${x}`,

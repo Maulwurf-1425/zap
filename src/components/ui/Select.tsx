@@ -24,6 +24,11 @@ interface SelectProps {
   /** Accessible name when no visible <label> points at `id`. */
   label?: string;
   icon?: ReactNode;
+  /** "chip": small rounded trigger like the composer's model chip. */
+  variant?: "input" | "chip";
+  /** Where the list opens (default below). */
+  side?: "top" | "bottom";
+  onOpenChange?: (open: boolean) => void;
 }
 
 function isGroups(options: SelectOption[] | SelectGroup[]): options is SelectGroup[] {
@@ -33,18 +38,32 @@ function isGroups(options: SelectOption[] | SelectGroup[]): options is SelectGro
 /** Dropdown in the app's look (glass popover, menu items, check mark)
  *  instead of the native, unstyled Windows list. Arrow keys, typeahead,
  *  Enter and Esc come from Radix. */
-export function Select({ id, value, options, onChange, label, icon }: SelectProps) {
+export function Select({
+  id,
+  value,
+  options,
+  onChange,
+  label,
+  icon,
+  variant = "input",
+  side = "bottom",
+  onOpenChange,
+}: SelectProps) {
   const groups: SelectGroup[] = isGroups(options) ? options : [{ options }];
   const current = groups.flatMap((g) => g.options).find((o) => o.value === value);
 
   return (
-    <DropdownMenu.Root modal={false}>
+    <DropdownMenu.Root modal={false} onOpenChange={onOpenChange}>
       <DropdownMenu.Trigger asChild>
         <button
           id={id}
           type="button"
           aria-label={label}
-          className="input flex items-center gap-2 text-left hover:bg-surface-2 data-[state=open]:border-[var(--coral-ring)] data-[state=open]:bg-surface-2"
+          className={
+            variant === "chip"
+              ? "btn h-8 max-w-[260px] gap-1.5 rounded-full border border-border bg-surface-1 pr-2 pl-3 text-caption font-medium text-fg-muted hover:bg-surface-2 hover:text-fg data-[state=open]:bg-surface-2 data-[state=open]:text-fg"
+              : "input flex items-center gap-2 text-left hover:bg-surface-2 data-[state=open]:border-[var(--coral-ring)] data-[state=open]:bg-surface-2"
+          }
         >
           {icon}
           <span className="min-w-0 flex-1 truncate">{current?.label ?? ""}</span>
@@ -59,9 +78,12 @@ export function Select({ id, value, options, onChange, label, icon }: SelectProp
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="start"
+          side={side}
           sideOffset={6}
           collisionPadding={12}
-          className="popover anim-pop z-[60] max-h-[min(320px,var(--radix-dropdown-menu-content-available-height))] w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 overflow-y-auto rounded-lg p-1.5"
+          className={`popover anim-pop z-[60] max-h-[min(320px,var(--radix-dropdown-menu-content-available-height))] min-w-56 overflow-y-auto rounded-lg p-1.5 ${
+            variant === "chip" ? "w-72" : "w-[var(--radix-dropdown-menu-trigger-width)]"
+          }`}
         >
           <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
             {groups.map((group, gi) => (

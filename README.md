@@ -44,7 +44,9 @@ fast chat window, so you can use them the way you'd use ChatGPT, just offline an
   open and control apps, research the web and work with files. Start them by hand, on a schedule,
   when a new file lands in a folder, or just ask the chat. Every command can require your OK,
   destructive ones always do.
-- **Quick ask:** press Alt+Space in any app to ask ZAP in a small window, without opening it.
+- **Quick ask:** press Alt+Space in any app and ZAP's chat box appears at the bottom of the screen.
+  Drag over part of the screen to ask about it: ZAP reads the text on it, and vision models also see
+  the picture.
 - **Knowledge folders:** let ZAP answer questions about your PDFs, Word files and notes, with the
   files as sources. The search runs on your PC.
 - **Compare models:** the same question to several models, answers side by side with speed and

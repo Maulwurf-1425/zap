@@ -135,6 +135,16 @@
     mix-blend-mode: overlay;
   }
 
+  /* Quick-ask window: transparent, only its cards show. */
+  html[data-quick],
+  html[data-quick] body {
+    background: transparent;
+  }
+  html[data-quick]::before,
+  html[data-quick] body::before {
+    display: none;
+  }
+
   .selectable,
   input,
   textarea {

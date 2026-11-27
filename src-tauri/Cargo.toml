@@ -45,6 +45,8 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock", "s
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 pdf-extract = "0.12.1"
+xcap = "0.9.10"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [profile.release]
 codegen-units = 1
@@ -55,7 +57,7 @@ strip = true
 
 [target."cfg(windows)".dependencies]
 tauri-winrt-notification = "0.8"
-windows = { version = "0.62", features = ["Win32_System_Performance", "Win32_Foundation", "Win32_Graphics_Dxgi"] }
+windows = { version = "0.62", features = ["Win32_System_Performance", "Win32_Foundation", "Win32_Graphics_Dxgi", "Win32_System_WinRT", "Foundation", "Graphics_Imaging", "Media_Ocr", "Storage_Streams"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"

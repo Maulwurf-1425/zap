@@ -4,13 +4,17 @@ Each release has a `## <version>` heading, optionally followed by ` – <update 
 and one `### English` and one `### Deutsch` section. The release workflow publishes the
 section of the tagged version, and ZAP shows it before and after updating.
 
-## 0.6.0
+## 0.6.0 – Beyond the Horizon
 
 ### English
 
-- **Quick ask from anywhere:** press Alt+Space in any app and a small ZAP window opens on top. Ask,
-  read the answer, ask follow-ups, and close it with Esc, or keep the exchange as a chat with
-  Ctrl+Enter. The shortcut can be changed under Settings → General.
+- **Quick ask from anywhere:** press Alt+Space in any app and ZAP's chat box appears at the bottom
+  of the screen, on top of everything. Ask, read the answer, ask follow-ups, and close it with Esc,
+  or keep the exchange as a chat with Ctrl+Enter. The shortcut can be changed under Settings →
+  General.
+- **Screen capture:** the screenshot button in the quick ask box lets you drag over any part of the
+  screen (or click for all of it) and ask about it. ZAP reads the text on it with Windows' own text
+  recognition, so every model can use it, and vision models also see the picture.
 - **Knowledge folders:** give ZAP folders with your PDFs, Word files and notes. ZAP makes them
   searchable by meaning, right on your PC (with a small Ollama model), and answers questions about
   them with the files as sources. Turn it on with the book button in the chat box.
@@ -23,9 +27,14 @@ section of the tagged version, and ZAP shows it before and after updating.
 
 ### Deutsch
 
-- **Schnellfrage von überall:** Drück Alt+Leertaste in jeder App, und ein kleines ZAP-Fenster
-  öffnet sich darüber. Frag, lies die Antwort, frag nach und schließ es mit Esc, oder mach mit
-  Strg+Enter einen Chat daraus. Das Tastenkürzel lässt sich unter Einstellungen → Allgemein ändern.
+- **Schnellfrage von überall:** Drück Alt+Leertaste in jeder App, und das ZAP-Eingabefeld
+  erscheint unten am Bildschirm, über allem anderen. Frag, lies die Antwort, frag nach und schließ
+  es mit Esc, oder mach mit Strg+Enter einen Chat daraus. Das Tastenkürzel lässt sich unter
+  Einstellungen → Allgemein ändern.
+- **Bildschirmfoto:** Mit dem Bildschirmfoto-Knopf in der Schnellfrage ziehst du einen Bereich des
+  Bildschirms auf (oder klickst für den ganzen) und fragst dazu. ZAP liest den Text darauf mit der
+  Texterkennung von Windows, damit jedes Modell ihn nutzen kann, und Modelle mit Bilderkennung sehen
+  auch das Bild.
 - **Wissensordner:** Gib ZAP Ordner mit deinen PDFs, Word-Dateien und Notizen. ZAP macht sie nach
   Bedeutung durchsuchbar, direkt auf deinem PC (mit einem kleinen Ollama-Modell), und beantwortet
   Fragen dazu mit den Dateien als Quellen. Einschalten mit dem Buch-Knopf im Eingabefeld.

@@ -6,6 +6,7 @@ import {
   ArrowUp,
   Check,
   ChevronRight,
+  Columns3,
   Ellipsis,
   FileDown,
   Folder,
@@ -30,6 +31,7 @@ import { IconButton } from "./ui/IconButton";
 import { ChatListSkeleton } from "./ui/Skeleton";
 import { ZapList } from "./ZapList";
 import { useChats } from "../store/chats";
+import { useZaps } from "../store/zaps";
 import { SIDEBAR_MAX, SIDEBAR_MIN, useSettings } from "../store/settings";
 import { useUi } from "../store/ui";
 import { api, type Chat, type ChatGroup, type ChatUsage, type SearchHit } from "../lib/ipc";
@@ -210,6 +212,16 @@ export function Sidebar({ overlay, onNavigate, onToggle }: SidebarProps) {
         <div className="min-w-0 flex-1">
           <EngineStatus />
         </div>
+        <IconButton
+          label={t.compare.title}
+          onClick={() => {
+            useZaps.getState().open(null);
+            useUi.getState().setCompareOpen(true);
+            onNavigate();
+          }}
+        >
+          <Columns3 size={20} strokeWidth={1.75} />
+        </IconButton>
         <IconButton label={t.sidebar.settings} shortcut="Ctrl+," onClick={() => openSettings()}>
           <Settings size={20} strokeWidth={1.75} />
         </IconButton>

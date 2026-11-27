@@ -450,6 +450,7 @@ export const useChats = create<ChatsState>((set, get) => {
 
     select: async (id) => {
       useZaps.getState().open(null);
+      useUi.getState().setCompareOpen(false);
       set({ activeId: id });
       if (!id) return;
       const chat = get().chats.find((c) => c.id === id);
@@ -481,6 +482,7 @@ export const useChats = create<ChatsState>((set, get) => {
 
     newChat: () => {
       useZaps.getState().open(null);
+      useUi.getState().setCompareOpen(false);
       // Created lazily on the first message, so empty chats never pile up.
       set({ activeId: null });
     },

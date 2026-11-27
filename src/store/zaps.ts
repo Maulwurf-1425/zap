@@ -12,6 +12,7 @@ import {
 } from "../lib/ipc";
 import { t } from "../lib/i18n";
 import { useModels } from "./models";
+import { useUi } from "./ui";
 import { avatarPng, defaultAvatar } from "../lib/avatars";
 
 /** A run in progress: the report so far and its tool steps. */
@@ -278,6 +279,7 @@ export const useZaps = create<ZapsState>((set, get) => {
 
     open: (id) => {
       set({ openId: id });
+      if (id) useUi.getState().setCompareOpen(false);
       if (id) {
         void get().loadRuns(id);
         void loadTotals(id);

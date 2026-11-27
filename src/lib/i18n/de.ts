@@ -1092,6 +1092,32 @@ export const de: Strings = {
     badge: "Cloud",
   },
 
+  compare: {
+    title: "Modelle vergleichen",
+    intro: "Stell mehreren Modellen dieselbe Frage und sieh ihre Antworten nebeneinander, mit Tempo und Tokens.",
+    addModel: "Modell hinzufügen",
+    remove: (name: string) => `${name} entfernen`,
+    parallel: "Gleichzeitig",
+    parallelHint:
+      "Aus: nacheinander, damit die Tempo-Werte fair sind. An: schneller, aber die Modelle teilen sich deine Hardware.",
+    prompt: "Frage",
+    promptPlaceholder: "Frag alle gewählten Modelle dasselbe …",
+    pickTwo: "Wähl mindestens zwei Modelle.",
+    run: "Vergleichen",
+    stop: "Stoppen",
+    waiting: "Wartet, bis es dran ist …",
+    thinking: "Denkt nach …",
+    stopped: "Gestoppt.",
+    fastest: "am schnellsten",
+    copy: "Antwort kopieren",
+    totalTime: "Gesamtzeit",
+    firstWord: (time: string) => `erstes Wort nach ${time}`,
+    speed: "Tempo",
+    perSec: (n: string) => `${n} Tokens/s`,
+    tokens: "Tokens",
+    inOut: (input: string, output: string) => `${input} rein · ${output} raus`,
+  },
+
   toast: {
     copied: "Kopiert.",
     nothingToCopy: "Noch keine Antwort zum Kopieren.",

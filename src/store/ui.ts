@@ -23,6 +23,8 @@ interface UiState {
   announcement: string;
   /** Resource monitor overlay (F5). */
   monitorOpen: boolean;
+  /** Model comparison view in the main area. */
+  compareOpen: boolean;
 
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
@@ -34,6 +36,7 @@ interface UiState {
   setDrawerOpen: (open: boolean) => void;
   announce: (text: string) => void;
   toggleMonitor: () => void;
+  setCompareOpen: (open: boolean) => void;
 }
 
 export const useUi = create<UiState>((set) => ({
@@ -45,6 +48,7 @@ export const useUi = create<UiState>((set) => ({
   drawerOpen: false,
   announcement: "",
   monitorOpen: false,
+  compareOpen: false,
 
   openSettings: (tab) => set((s) => ({ settingsOpen: true, settingsTab: tab ?? s.settingsTab, paletteOpen: false })),
   closeSettings: () => set({ settingsOpen: false }),
@@ -55,6 +59,7 @@ export const useUi = create<UiState>((set) => ({
   closeConfirm: () => set({ confirm: null }),
   setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
   toggleMonitor: () => set((s) => ({ monitorOpen: !s.monitorOpen })),
+  setCompareOpen: (compareOpen) => set({ compareOpen }),
   // Clear first so repeating the same text is announced again.
   announce: (text) => {
     set({ announcement: "" });

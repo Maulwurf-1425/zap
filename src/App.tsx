@@ -12,6 +12,8 @@ import { Onboarding } from "./components/Onboarding";
 import { CommandPalette } from "./components/CommandPalette";
 import { ZapEditor, ZapView } from "./components/ZapView";
 import { ResourceMonitor } from "./components/ResourceMonitor";
+import { CompareView } from "./components/CompareView";
+import { useCompare } from "./store/compare";
 import { useChats } from "./store/chats";
 import { sameModel, useModels } from "./store/models";
 import { useProviders } from "./store/providers";
@@ -47,6 +49,7 @@ export default function App() {
   const narrow = useNarrow();
   const chatView = useRef<ChatViewHandle>(null);
   const zapOpen = useZaps((s) => s.openId !== null);
+  const compareOpen = useUi((s) => s.compareOpen);
 
   // Boot once (guarded so StrictMode can't register listeners twice).
   useEffect(() => {
@@ -59,6 +62,7 @@ export default function App() {
         useModels.getState().init(),
         useChats.getState().init(),
         useZaps.getState().init(),
+        useCompare.getState().init(),
       ]);
       void useDiscord
         .getState()
@@ -149,7 +153,7 @@ export default function App() {
                 </>
               )}
 
-              {zapOpen ? <ZapView /> : <ChatView ref={chatView} />}
+              {compareOpen ? <CompareView /> : zapOpen ? <ZapView /> : <ChatView ref={chatView} />}
             </div>
           </div>
         </div>

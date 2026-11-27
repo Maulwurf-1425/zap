@@ -101,6 +101,9 @@ pub async fn engine_install_supported() -> bool {
 /// after installing so it can set up its `lms` CLI.
 #[tauri::command]
 pub async fn install_engine(app: AppHandle, provider: ProviderKind) -> AppResult<ProviderStatus> {
+    if provider == ProviderKind::Cloud {
+        return Err(AppError::Unsupported);
+    }
     static BUSY: Mutex<Vec<ProviderKind>> = Mutex::new(Vec::new());
     {
         let mut busy = lock(&BUSY);

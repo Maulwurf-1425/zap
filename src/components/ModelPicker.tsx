@@ -1,13 +1,14 @@
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Check, ChevronDown, Cpu, Download, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, Cloud, Cpu, Download, TriangleAlert } from "lucide-react";
 import { CURATED_MODELS, hasOllamaModel, useModels } from "../store/models";
 import { useChats } from "../store/chats";
 import { anyRunning, useProviders } from "../store/providers";
 import { useUi } from "../store/ui";
 import { formatBytes } from "../lib/format";
-import { engineName, t } from "../lib/i18n";
-import { modelLabel, PROVIDERS, type ModelInfo } from "../lib/ipc";
+import { t } from "../lib/i18n";
+import { modelLabel, type ModelInfo } from "../lib/ipc";
+import { groupModels } from "../lib/modelGroups";
 import { PullRow } from "./PullRow";
 import { useVramInfo, vramShortfall, type VramInfo } from "../lib/vram";
 
@@ -24,7 +25,8 @@ export function ModelPicker() {
   const [open, setOpen] = useState(false);
   const vram = useVramInfo(open);
 
-  const running = anyRunning(statuses);
+  // Cloud models need no local engine.
+  const running = anyRunning(statuses) || installed.some((m) => m.provider === "cloud");
   const ollamaRunning = statuses.ollama === "running";
   const lmstudioRunning = statuses.lmstudio === "running";
   const activePulls = Object.values(pulls);
@@ -32,9 +34,7 @@ export function ModelPicker() {
     ? CURATED_MODELS.filter((m) => !hasOllamaModel(installed, m.name) && !pulls[m.name]).slice(0, 3)
     : [];
   const label = selected ? modelLabel(selected) : running ? t.models.choose : t.models.none;
-  const groups = PROVIDERS.map((kind) => ({ kind, models: installed.filter((m) => m.provider === kind) })).filter(
-    (g) => g.models.length > 0,
-  );
+  const groups = groupModels(installed);
   const showHeaders = groups.length > 1 || (lmstudioRunning && ollamaRunning);
   const lmstudioEmpty = lmstudioRunning && !installed.some((m) => m.provider === "lmstudio");
 
@@ -59,10 +59,11 @@ export function ModelPicker() {
           className="popover anim-pop z-50 w-[380px] rounded-lg p-2"
         >
           <div role="listbox" aria-label={t.models.choose} className="max-h-[300px] overflow-y-auto">
-            {groups.map(({ kind, models }) => (
-              <div key={kind} role="group" aria-label={engineName(kind)}>
-                <div className="px-3 pt-1 pb-1.5 text-caption text-fg-subtle">
-                  {showHeaders ? engineName(kind) : t.models.installed}
+            {groups.map(({ key, label: groupLabel, cloud, models }) => (
+              <div key={key} role="group" aria-label={groupLabel}>
+                <div className="flex items-center gap-1.5 px-3 pt-1 pb-1.5 text-caption text-fg-subtle">
+                  {cloud && <Cloud size={12} strokeWidth={1.75} aria-hidden="true" />}
+                  {showHeaders ? groupLabel : t.models.installed}
                 </div>
                 {models.map((m) => (
                   <ModelOption

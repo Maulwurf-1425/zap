@@ -6,16 +6,14 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use futures_util::StreamExt;
 use serde::Deserialize;
-use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
-use crate::error::{AppError, AppResult};
-use crate::ndjson::{SseDecoder, SseEvent};
+use crate::error::AppResult;
+use crate::openai::{self, Dialect};
 use crate::provider::{
-    model_key, tools_json, ChatMessage, ChatOptions, ChatProvider, ChatStats, ChatTurn, ModelCaps,
-    ModelInfo, Piece, ProviderKind, ProviderStatus, ToolCall, ToolSpec,
+    model_key, ChatMessage, ChatOptions, ChatProvider, ChatTurn, ModelCaps, ModelInfo, Piece,
+    ProviderKind, ProviderStatus, ToolSpec,
 };
 
 pub const DEFAULT_PORT: u16 = 1234;
@@ -262,98 +260,6 @@ pub async fn start(http: &reqwest::Client, port: u16, on_starting: impl Fn()) ->
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Accepts both `{"error": "..."}` and `{"error": {"message": "..."}}`.
-fn error_message(body: &Value) -> Option<String> {
-    let err = body.get("error")?;
-    err.as_str().map(str::to_owned).or_else(|| {
-        err.get("message")
-            .and_then(Value::as_str)
-            .map(str::to_owned)
-    })
-}
-
-async fn error_from_response(resp: reqwest::Response) -> AppError {
-    let status = resp.status();
-    let body: Value = resp.json().await.unwrap_or(Value::Null);
-    match error_message(&body) {
-        Some(msg) => AppError::from_provider_message(&msg),
-        None if status == reqwest::StatusCode::NOT_FOUND => AppError::ModelNotFound(String::new()),
-        None => AppError::Provider(status.to_string()),
-    }
-}
-
-/// OpenAI format: a message with images gets a content array of
-/// `text` and `image_url` parts (data URLs).
-fn messages_json(messages: &[ChatMessage]) -> Value {
-    Value::Array(
-        messages
-            .iter()
-            .map(|m| {
-                if m.role == "tool" {
-                    return json!({ "role": "tool", "tool_call_id": m.tool_call_id, "content": m.content });
-                }
-                if !m.tool_calls.is_empty() {
-                    // OpenAI format: arguments are a JSON string.
-                    let calls: Vec<Value> = m
-                        .tool_calls
-                        .iter()
-                        .map(|c| {
-                            json!({
-                                "id": c.id,
-                                "type": "function",
-                                "function": { "name": c.name, "arguments": c.arguments.to_string() },
-                            })
-                        })
-                        .collect();
-                    return json!({ "role": "assistant", "content": m.content, "tool_calls": calls });
-                }
-                if m.images.is_empty() {
-                    return json!({ "role": m.role, "content": m.content });
-                }
-                let mut parts = vec![json!({ "type": "text", "text": m.content })];
-                parts.extend(
-                    m.images
-                        .iter()
-                        .map(|url| json!({ "type": "image_url", "image_url": { "url": url } })),
-                );
-                json!({ "role": m.role, "content": parts })
-            })
-            .collect(),
-    )
-}
-
-fn request_body(
-    model: &str,
-    messages: &[ChatMessage],
-    options: &ChatOptions,
-    stream: bool,
-    tools: &[ToolSpec],
-) -> Value {
-    let mut body = json!({ "model": model, "messages": messages_json(messages), "stream": stream });
-    if !tools.is_empty() {
-        body["tools"] = tools_json(tools);
-    }
-    if stream {
-        // Final chunk then carries prompt/completion token counts.
-        body["stream_options"] = json!({ "include_usage": true });
-    }
-    if let Some(t) = options.temperature {
-        body["temperature"] = json!(t);
-    }
-    if let Some(n) = options.max_tokens {
-        body["max_tokens"] = json!(n);
-    }
-    // LM Studio's switch for reasoning models (ignored by the others).
-    if options.think == Some(false) {
-        body["reasoning_effort"] = json!("none");
-    }
-    // Idle time before LM Studio unloads a model it loaded for a request.
-    if let Some(min) = options.keep_alive_min {
-        body["ttl"] = json!(u64::from(min) * 60);
-    }
-    body
-}
-
 fn is_embedding(id: &str, kind: Option<&str>) -> bool {
     kind == Some("embeddings") || id.to_lowercase().contains("embed")
 }
@@ -386,73 +292,6 @@ struct ModelEntry {
     capabilities: Option<Vec<String>>,
 }
 
-#[derive(Deserialize)]
-struct StreamChunk {
-    #[serde(default)]
-    choices: Vec<StreamChoice>,
-    usage: Option<Usage>,
-    error: Option<Value>,
-}
-
-#[derive(Deserialize)]
-struct StreamChoice {
-    delta: Option<Delta>,
-    finish_reason: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct Delta {
-    content: Option<String>,
-    /// Thinking models (LM Studio puts their reasoning here).
-    reasoning_content: Option<String>,
-    tool_calls: Option<Vec<DeltaToolCall>>,
-}
-
-/// Tool calls stream in pieces: the first chunk for an `index` carries id
-/// and name, later chunks append to the JSON `arguments` string.
-#[derive(Deserialize)]
-struct DeltaToolCall {
-    index: Option<usize>,
-    id: Option<String>,
-    function: Option<DeltaFunction>,
-}
-
-#[derive(Deserialize)]
-struct DeltaFunction {
-    name: Option<String>,
-    arguments: Option<String>,
-}
-
-#[derive(Default)]
-struct PartialCall {
-    id: String,
-    name: String,
-    arguments: String,
-}
-
-fn finish_calls(parts: Vec<PartialCall>) -> Vec<ToolCall> {
-    parts
-        .into_iter()
-        .enumerate()
-        .filter(|(_, p)| !p.name.is_empty())
-        .map(|(i, p)| ToolCall {
-            id: if p.id.is_empty() {
-                format!("call_{}", i + 1)
-            } else {
-                p.id
-            },
-            name: p.name,
-            arguments: serde_json::from_str(&p.arguments).unwrap_or_else(|_| json!({})),
-        })
-        .collect()
-}
-
-#[derive(Deserialize)]
-struct Usage {
-    prompt_tokens: Option<u64>,
-    completion_tokens: Option<u64>,
-}
-
 impl LmStudio<'_> {
     fn url(&self, path: &str) -> String {
         format!("{}{path}", base_url(self.port))
@@ -461,7 +300,7 @@ impl LmStudio<'_> {
     async fn fetch_models(&self, path: &str) -> AppResult<Vec<ModelEntry>> {
         let resp = self.http.get(self.url(path)).send().await?;
         if !resp.status().is_success() {
-            return Err(error_from_response(resp).await);
+            return Err(openai::error_from_response(resp).await);
         }
         Ok(resp.json::<ModelList>().await?.data)
     }
@@ -485,6 +324,7 @@ impl ChatProvider for LmStudio<'_> {
                 name: m.id,
                 provider: ProviderKind::Lmstudio,
                 modified_at: None,
+                source: None,
             })
             .collect();
         models.sort_by(|a, b| a.name.cmp(&b.name));
@@ -498,139 +338,14 @@ impl ChatProvider for LmStudio<'_> {
         options: &ChatOptions,
         tools: &[ToolSpec],
         cancel: &CancellationToken,
-        mut on_token: F,
+        on_token: F,
     ) -> AppResult<ChatTurn>
     where
         F: FnMut(Piece<'_>) + Send,
     {
-        let started = Instant::now();
-        let send = self
-            .http
-            .post(self.url("/v1/chat/completions"))
-            .json(&request_body(model, messages, options, true, tools))
-            .send();
-        let resp = tokio::select! {
-            _ = cancel.cancelled() => return Err(AppError::Cancelled),
-            r = send => r?,
-        };
-        if !resp.status().is_success() {
-            return Err(error_from_response(resp).await);
-        }
-
-        let mut stream = resp.bytes_stream();
-        let mut decoder = SseDecoder::new();
-        let mut first_token: Option<Instant> = None;
-        let mut chunks: u64 = 0;
-        let mut usage_tokens: Option<u64> = None;
-        let mut prompt_tokens: u64 = 0;
-        let mut finished = false;
-        let mut calls: Vec<PartialCall> = Vec::new();
-
-        let stats = |first: Option<Instant>, tokens: u64, prompt: u64| {
-            let gen = first.map(|t| t.elapsed()).unwrap_or_default();
-            let secs = gen.as_secs_f64();
-            ChatStats {
-                eval_count: tokens,
-                prompt_eval_count: prompt,
-                eval_duration_ns: gen.as_nanos() as u64,
-                total_duration_ns: started.elapsed().as_nanos() as u64,
-                tokens_per_sec: if secs > 0.0 {
-                    tokens as f64 / secs
-                } else {
-                    0.0
-                },
-            }
-        };
-
-        loop {
-            let next = tokio::select! {
-                _ = cancel.cancelled() => return Err(AppError::Cancelled),
-                n = stream.next() => n,
-            };
-            let stream_ended = next.is_none();
-            let events: Vec<SseEvent<StreamChunk>> = match next {
-                Some(chunk) => decoder.push(&chunk?),
-                None => decoder.finish::<StreamChunk>().into_iter().collect(),
-            };
-            for event in events {
-                let chunk = match event {
-                    SseEvent::Done => {
-                        return Ok(ChatTurn {
-                            stats: stats(
-                                first_token,
-                                usage_tokens.unwrap_or(chunks),
-                                prompt_tokens,
-                            ),
-                            tool_calls: finish_calls(calls),
-                        })
-                    }
-                    SseEvent::Data(chunk) => chunk,
-                };
-                if let Some(err) = chunk.error.as_ref().and_then(|e| {
-                    e.as_str()
-                        .map(str::to_owned)
-                        .or_else(|| e.get("message").and_then(Value::as_str).map(str::to_owned))
-                }) {
-                    return Err(AppError::from_provider_message(&err));
-                }
-                if let Some(usage) = chunk.usage {
-                    if let Some(n) = usage.completion_tokens {
-                        usage_tokens = Some(n);
-                    }
-                    prompt_tokens = usage.prompt_tokens.unwrap_or(prompt_tokens);
-                }
-                for choice in chunk.choices {
-                    let Some(delta) = choice.delta else {
-                        if choice.finish_reason.is_some() {
-                            finished = true;
-                        }
-                        continue;
-                    };
-                    if let Some(text) = delta.reasoning_content.filter(|t| !t.is_empty()) {
-                        first_token.get_or_insert_with(Instant::now);
-                        chunks += 1;
-                        on_token(Piece::Thinking(&text));
-                    }
-                    if let Some(text) = delta.content.filter(|t| !t.is_empty()) {
-                        first_token.get_or_insert_with(Instant::now);
-                        chunks += 1;
-                        on_token(Piece::Text(&text));
-                    }
-                    for part in delta.tool_calls.unwrap_or_default() {
-                        let idx = part.index.unwrap_or(calls.len().saturating_sub(1));
-                        if calls.len() <= idx {
-                            calls.resize_with(idx + 1, PartialCall::default);
-                        }
-                        let slot = &mut calls[idx];
-                        if let Some(id) = part.id {
-                            slot.id = id;
-                        }
-                        if let Some(f) = part.function {
-                            if let Some(name) = f.name {
-                                slot.name.push_str(&name);
-                            }
-                            if let Some(args) = f.arguments {
-                                slot.arguments.push_str(&args);
-                            }
-                        }
-                    }
-                    if choice.finish_reason.is_some() {
-                        finished = true;
-                    }
-                }
-            }
-            if stream_ended {
-                // Some servers omit `[DONE]`; a finish reason is enough.
-                return if finished {
-                    Ok(ChatTurn {
-                        stats: stats(first_token, usage_tokens.unwrap_or(chunks), prompt_tokens),
-                        tool_calls: finish_calls(calls),
-                    })
-                } else {
-                    Err(AppError::Unreachable)
-                };
-            }
-        }
+        let body = openai::request_body(model, messages, options, true, tools, Dialect::LM_STUDIO);
+        let request = self.http.post(self.url("/v1/chat/completions")).json(&body);
+        openai::stream_turn(request, cancel, on_token).await
     }
 
     async fn complete(
@@ -639,21 +354,13 @@ impl ChatProvider for LmStudio<'_> {
         messages: &[ChatMessage],
         options: &ChatOptions,
     ) -> AppResult<String> {
-        let resp = self
+        let body = openai::request_body(model, messages, options, false, &[], Dialect::LM_STUDIO);
+        let request = self
             .http
             .post(self.url("/v1/chat/completions"))
             .timeout(COMPLETE_TIMEOUT)
-            .json(&request_body(model, messages, options, false, &[]))
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            return Err(error_from_response(resp).await);
-        }
-        let body: Value = resp.json().await?;
-        Ok(body["choices"][0]["message"]["content"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string())
+            .json(&body);
+        openai::complete_text(request).await
     }
 
     /// Vision models have type "vlm" in the native model list. Older LM
@@ -686,140 +393,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_both_error_shapes() {
-        assert_eq!(
-            error_message(&json!({"error": "boom"})).as_deref(),
-            Some("boom")
-        );
-        assert_eq!(
-            error_message(&json!({"error": {"message": "nope"}})).as_deref(),
-            Some("nope")
-        );
-        assert_eq!(error_message(&json!({"ok": true})), None);
-    }
-
-    #[test]
     fn filters_embedding_models() {
         assert!(is_embedding("text-embedding-nomic-embed-text-v1.5", None));
         assert!(is_embedding("x", Some("embeddings")));
         assert!(!is_embedding("qwen2.5-7b-instruct", Some("llm")));
-    }
-
-    #[test]
-    fn stream_chunks_deserialize() {
-        let mut d = SseDecoder::new();
-        let raw = b"data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n\
-data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\n\
-data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"completion_tokens\":3}}\n\n\
-data: [DONE]\n\n";
-        let events: Vec<SseEvent<StreamChunk>> = d.push(raw);
-        assert_eq!(events.len(), 4);
-        let SseEvent::Data(second) = &events[1] else {
-            panic!("expected data")
-        };
-        assert_eq!(
-            second.choices[0]
-                .delta
-                .as_ref()
-                .and_then(|d| d.content.as_deref()),
-            Some("Hi")
-        );
-        let SseEvent::Data(third) = &events[2] else {
-            panic!("expected data")
-        };
-        assert_eq!(third.choices[0].finish_reason.as_deref(), Some("stop"));
-        assert_eq!(
-            third.usage.as_ref().and_then(|u| u.completion_tokens),
-            Some(3)
-        );
-        assert!(matches!(events[3], SseEvent::Done));
-    }
-
-    #[test]
-    fn images_become_openai_content_parts() {
-        let msgs = [
-            ChatMessage::text("system", "be brief"),
-            ChatMessage {
-                role: "user".into(),
-                content: "what is this?".into(),
-                images: vec!["data:image/png;base64,QUJD".into()],
-                ..Default::default()
-            },
-        ];
-        let body = request_body("m", &msgs, &ChatOptions::default(), true, &[]);
-        assert_eq!(body["messages"][0]["content"], "be brief");
-        let parts = &body["messages"][1]["content"];
-        assert_eq!(parts[0], json!({ "type": "text", "text": "what is this?" }));
-        assert_eq!(parts[1]["image_url"]["url"], "data:image/png;base64,QUJD");
-    }
-
-    #[test]
-    fn assembles_streamed_tool_calls() {
-        let mut d = SseDecoder::new();
-        let raw = br#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"web_search","arguments":""}}]}}]}
-
-data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"query\":"}}]}}]}
-
-data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"zap\"}"}}]},"finish_reason":"tool_calls"}]}
-
-"#;
-        let events: Vec<SseEvent<StreamChunk>> = d.push(raw);
-        let mut calls: Vec<PartialCall> = Vec::new();
-        for e in events {
-            let SseEvent::Data(chunk) = e else { continue };
-            for choice in chunk.choices {
-                for part in choice.delta.and_then(|d| d.tool_calls).unwrap_or_default() {
-                    let idx = part.index.unwrap_or(0);
-                    if calls.len() <= idx {
-                        calls.resize_with(idx + 1, PartialCall::default);
-                    }
-                    if let Some(id) = part.id {
-                        calls[idx].id = id;
-                    }
-                    if let Some(f) = part.function {
-                        calls[idx].name.push_str(&f.name.unwrap_or_default());
-                        calls[idx]
-                            .arguments
-                            .push_str(&f.arguments.unwrap_or_default());
-                    }
-                }
-            }
-        }
-        let done = finish_calls(calls);
-        assert_eq!(done.len(), 1);
-        assert_eq!(done[0].id, "c1");
-        assert_eq!(done[0].name, "web_search");
-        assert_eq!(done[0].arguments, json!({ "query": "zap" }));
-    }
-
-    #[test]
-    fn tool_messages_use_openai_shape() {
-        let msgs = [
-            ChatMessage {
-                role: "assistant".into(),
-                tool_calls: vec![ToolCall {
-                    id: "c1".into(),
-                    name: "web_search".into(),
-                    arguments: json!({"query": "x"}),
-                }],
-                ..Default::default()
-            },
-            ChatMessage {
-                role: "tool".into(),
-                content: "results".into(),
-                tool_call_id: Some("c1".into()),
-                ..Default::default()
-            },
-        ];
-        let json = messages_json(&msgs);
-        assert_eq!(
-            json[0]["tool_calls"][0]["function"]["arguments"],
-            "{\"query\":\"x\"}"
-        );
-        assert_eq!(
-            json[1],
-            json!({ "role": "tool", "tool_call_id": "c1", "content": "results" })
-        );
     }
 
     #[test]

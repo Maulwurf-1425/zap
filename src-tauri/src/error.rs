@@ -22,6 +22,12 @@ pub enum AppError {
     ToolFormat(String),
     #[error("provider: {0}")]
     Provider(String),
+    /// Cloud provider: API key missing, wrong or without access.
+    #[error("auth: {0}")]
+    Auth(String),
+    /// Cloud provider: rate limit, quota or credits used up.
+    #[error("rate limited: {0}")]
+    RateLimited(String),
     #[error("database: {0}")]
     Db(#[from] rusqlite::Error),
     #[error("http: {0}")]
@@ -41,6 +47,8 @@ impl AppError {
             AppError::Unsupported => "unsupported",
             AppError::ToolFormat(_) => "tool_format",
             AppError::Provider(_) | AppError::Http(_) => "provider_error",
+            AppError::Auth(_) => "auth_failed",
+            AppError::RateLimited(_) => "rate_limited",
             AppError::Db(_) | AppError::Other(_) => "generic",
         }
     }
@@ -53,6 +61,21 @@ impl AppError {
             || lower.contains("disk full")
         {
             AppError::DiskFull
+        } else if lower.contains("api key")
+            || lower.contains("api_key")
+            || lower.contains("x-api-key")
+            || lower.contains("unauthorized")
+            || lower.contains("authentication")
+            || lower.contains("permission denied")
+        {
+            AppError::Auth(msg.to_string())
+        } else if lower.contains("rate limit")
+            || lower.contains("rate_limit")
+            || lower.contains("quota")
+            || lower.contains("insufficient credits")
+            || lower.contains("credit balance")
+        {
+            AppError::RateLimited(msg.to_string())
         } else if lower.contains("does not match the expected")
             || lower.contains("failed to parse tool")
             || lower.contains("tool call") && lower.contains("parse")

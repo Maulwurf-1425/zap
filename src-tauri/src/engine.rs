@@ -7,6 +7,7 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::cloud;
 use crate::db;
 use crate::lmstudio::{self, LmStudio};
 use crate::ollama::{self, Ollama};
@@ -29,6 +30,7 @@ impl EngineConfig {
         match kind {
             ProviderKind::Ollama => self.ollama_enabled,
             ProviderKind::Lmstudio => self.lmstudio_enabled,
+            ProviderKind::Cloud => true,
         }
     }
 }
@@ -75,6 +77,7 @@ async fn is_up(state: &AppState, kind: ProviderKind, cfg: &EngineConfig) -> bool
     match kind {
         ProviderKind::Ollama => ollama::is_up(&state.http).await,
         ProviderKind::Lmstudio => lmstudio::is_up(&state.http, cfg.lmstudio_port).await,
+        ProviderKind::Cloud => true,
     }
 }
 
@@ -82,11 +85,15 @@ fn installed(kind: ProviderKind) -> bool {
     match kind {
         ProviderKind::Ollama => ollama::installed(),
         ProviderKind::Lmstudio => lmstudio::installed(),
+        ProviderKind::Cloud => true,
     }
 }
 
 /// Uses a running server or starts it. Disabled providers report `Disabled`.
 pub async fn ensure(app: &AppHandle, kind: ProviderKind) -> ProviderStatus {
+    if kind == ProviderKind::Cloud {
+        return ProviderStatus::Running;
+    }
     let state = app.state::<AppState>();
     let cfg = config(&state);
     if !cfg.enabled(kind) {
@@ -102,6 +109,7 @@ pub async fn ensure(app: &AppHandle, kind: ProviderKind) -> ProviderStatus {
         ProviderKind::Lmstudio => {
             lmstudio::start(&state.http, cfg.lmstudio_port, on_starting).await
         }
+        ProviderKind::Cloud => ProviderStatus::Running,
     };
     set_status(app, kind, status);
     state.starting(kind).store(false, Ordering::SeqCst);
@@ -111,6 +119,9 @@ pub async fn ensure(app: &AppHandle, kind: ProviderKind) -> ProviderStatus {
 /// Stops a provider's server and starts it again (e.g. when it hangs or after
 /// changing its settings outside ZAP).
 pub async fn restart(app: &AppHandle, kind: ProviderKind) -> ProviderStatus {
+    if kind == ProviderKind::Cloud {
+        return ProviderStatus::Running;
+    }
     let state = app.state::<AppState>();
     let cfg = config(&state);
     if !cfg.enabled(kind) {
@@ -124,6 +135,7 @@ pub async fn restart(app: &AppHandle, kind: ProviderKind) -> ProviderStatus {
     match kind {
         ProviderKind::Ollama => ollama::stop(&state).await,
         ProviderKind::Lmstudio => lmstudio::stop_server(&state.http, cfg.lmstudio_port).await,
+        ProviderKind::Cloud => {}
     }
     state.starting(kind).store(false, Ordering::SeqCst);
     ensure(app, kind).await
@@ -166,12 +178,15 @@ pub async fn supervise(app: AppHandle) {
     }
 }
 
+/// A local engine's client. Cloud models go through `route` (they need
+/// the connection from the model key).
 pub fn provider<'a>(
     state: &'a AppState,
     kind: ProviderKind,
     cfg: &EngineConfig,
 ) -> AnyProvider<'a> {
     match kind {
+        ProviderKind::Cloud => AnyProvider::Cloud(cloud::provider_for(state, "")),
         ProviderKind::Ollama => AnyProvider::Ollama(Ollama { http: &state.http }),
         ProviderKind::Lmstudio => AnyProvider::LmStudio(LmStudio {
             http: &state.http,
@@ -185,6 +200,13 @@ pub fn provider<'a>(
 pub fn route<'a, 'k>(state: &'a AppState, key: &'k str) -> (AnyProvider<'a>, &'k str) {
     let cfg = config(state);
     let (kind, name) = parse_model_key(key);
+    if kind == ProviderKind::Cloud {
+        let (conn_id, model) = cloud::split_cloud_name(name);
+        return (
+            AnyProvider::Cloud(cloud::provider_for(state, conn_id)),
+            model,
+        );
+    }
     (provider(state, kind, &cfg), name)
 }
 
@@ -201,5 +223,6 @@ pub async fn list_all_models(state: &AppState) -> Vec<ModelInfo> {
             all.extend(models);
         }
     }
+    all.extend(cloud::list_all(state).await);
     all
 }

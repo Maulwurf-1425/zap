@@ -40,8 +40,8 @@ export function setLanguage(lang: Language): void {
   if (typeof document !== "undefined") document.documentElement.lang = lang;
 }
 
-export function engineName(kind: ProviderKind): string {
-  return t.engines.names[kind];
+export function engineName(kind: ProviderKind | "cloud"): string {
+  return kind === "cloud" ? t.cloud.title : t.engines.names[kind];
 }
 
 export function errorMessage(code: ErrorCode): string {
@@ -61,6 +61,10 @@ export function errorMessage(code: ErrorCode): string {
       return e.unsupported;
     case "tool_format":
       return e.toolFormat;
+    case "auth_failed":
+      return e.authFailed;
+    case "rate_limited":
+      return e.rateLimited;
     default:
       return e.generic;
   }

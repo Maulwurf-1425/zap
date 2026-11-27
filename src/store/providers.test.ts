@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { anyRunning, enabledProviders, nextInstall, primaryProvider } from "./providers";
-import { modelLabel, modelProvider, type InstallPhase } from "../lib/ipc";
+import { anyRunning, enabledProviders, modelReady, nextInstall, primaryProvider } from "./providers";
+import { cloudConnectionOf, modelLabel, modelProvider, type InstallPhase } from "../lib/ipc";
 
 describe("engines", () => {
   it("lists enabled engines and finds a running one", () => {
@@ -50,5 +50,17 @@ describe("engines", () => {
     expect(modelProvider("lmstudio::qwen/qwen2.5-7b")).toBe("lmstudio");
     expect(modelLabel("lmstudio::qwen/qwen2.5-7b")).toBe("qwen/qwen2.5-7b");
     expect(modelLabel("mistral:7b")).toBe("mistral:7b");
+  });
+
+  it("treats cloud models as always ready", () => {
+    const key = "cloud::c1::meta-llama/llama-3.3-70b";
+    expect(modelProvider(key)).toBe("cloud");
+    expect(modelLabel(key)).toBe("meta-llama/llama-3.3-70b");
+    expect(cloudConnectionOf(key)).toBe("c1");
+    expect(cloudConnectionOf("mistral:7b")).toBeNull();
+    const down = { ollama: "stopped", lmstudio: "disabled" } as const;
+    expect(modelReady(down, key)).toBe(true);
+    expect(modelReady(down, "mistral:7b")).toBe(false);
+    expect(modelReady({ ollama: "running", lmstudio: "disabled" }, "mistral:7b")).toBe(true);
   });
 });

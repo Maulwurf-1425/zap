@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod audio;
+mod cloud;
 mod commands;
 mod db;
 mod discord;
@@ -15,6 +16,7 @@ mod lmstudio;
 mod monitor;
 mod ndjson;
 mod ollama;
+mod openai;
 mod provider;
 mod schedule;
 mod state;
@@ -157,6 +159,9 @@ fn main() {
             commands::read_file_attachment,
             commands::answer_approval,
             monitor::system_usage,
+            cloud::cloud_key_status,
+            cloud::cloud_set_key,
+            cloud::cloud_test,
             monitor::loaded_models,
             monitor::gpu_memory,
             monitor::unload_models,

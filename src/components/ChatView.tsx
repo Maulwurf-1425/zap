@@ -8,7 +8,7 @@ import { ErrorCard, NoModelNotice, EngineNotice } from "./Notice";
 import { MessagesSkeleton } from "./ui/Skeleton";
 import { useChats, type UiMessage } from "../store/chats";
 import { useModels } from "../store/models";
-import { anyRunning, primaryProvider, useProviders } from "../store/providers";
+import { anyRunning, modelReady, primaryProvider, useProviders } from "../store/providers";
 import { useUi } from "../store/ui";
 import { engineName, t } from "../lib/i18n";
 import { modelProvider } from "../lib/ipc";
@@ -54,9 +54,11 @@ export const ChatView = forwardRef<ChatViewHandle>(function ChatView(_props, ref
     [send],
   );
 
-  const running = anyRunning(statuses);
+  // Cloud models count as running engines: they need nothing local.
+  const hasCloud = useModels((s) => s.installed.some((m) => m.provider === "cloud"));
+  const running = anyRunning(statuses) || hasCloud;
   // Ready when the selected model's own engine is up.
-  const ready = selected !== null && statuses[modelProvider(selected)] === "running";
+  const ready = modelReady(statuses, selected);
   const showChat = activeId !== null && (messages.length > 0 || loading);
 
   let body: React.ReactNode;
@@ -90,8 +92,10 @@ export const ChatView = forwardRef<ChatViewHandle>(function ChatView(_props, ref
     else if (primary.status === "not_found") hint = t.engines.missing(engineName(primary.kind));
     else hint = t.engines.stoppedLong(engineName(primary.kind));
   } else if (modelsLoaded && !selected) hint = t.models.noModel;
-  else if (selected && !ready) hint = t.engines.stoppedLong(engineName(modelProvider(selected)));
-  else if (generating) hint = t.composer.hintGenerating;
+  else if (selected && !ready) {
+    const source = modelProvider(selected);
+    if (source !== "cloud") hint = t.engines.stoppedLong(engineName(source));
+  } else if (generating) hint = t.composer.hintGenerating;
 
   // Drag & drop files anywhere over the chat area. The counter handles
   // dragenter/dragleave firing for every child element.

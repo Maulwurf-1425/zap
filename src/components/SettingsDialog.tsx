@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { toast } from "sonner";
 import {
@@ -42,6 +42,7 @@ import { DEFAULT_SETTINGS, TYPOGRAPHY_KEYS, useSettings } from "../store/setting
 import { releaseLabel, useUpdates } from "../store/updates";
 import { VoiceTab } from "./VoiceSettings";
 import { IdleModelsField, ZapsTab } from "./ZapSettings";
+import { CloudSection } from "./CloudSettings";
 import { useAvatarCredits } from "../lib/avatars";
 import { useDiscord } from "../store/discord";
 import { CURATED_MODELS, curatedDescription, hasOllamaModel, MODEL_NAME, useModels } from "../store/models";
@@ -542,7 +543,9 @@ function TypographySection() {
 // --- Models ----------------------------------------------------------------
 
 function ModelsTab() {
-  const installed = useModels((s) => s.installed);
+  const allModels = useModels((s) => s.installed);
+  // Cloud models are managed under "Cloud models", not in this list.
+  const installed = useMemo(() => allModels.filter((m) => m.provider !== "cloud"), [allModels]);
   const loaded = useModels((s) => s.loaded);
   const pulls = useModels((s) => s.pulls);
   const pull = useModels((s) => s.pull);
@@ -594,6 +597,8 @@ function ModelsTab() {
         <EngineCard kind="ollama" />
         <EngineCard kind="lmstudio" showPort />
       </Section>
+
+      <CloudSection />
 
       <Section title={t.zaps.settings.memory}>
         <IdleModelsField />
@@ -801,7 +806,8 @@ function ChatTab() {
           onChange={(value) => void update({ default_model: value || null })}
           options={[
             { value: "", label: c.defaultModelAuto },
-            ...installed.map((m) => ({ value: m.name, label: m.name })),
+            // Model keys, so LM Studio and cloud models work as default too.
+            ...installed.map((m) => ({ value: m.id, label: m.source ? `${m.name} · ${m.source}` : m.name })),
           ]}
         />
       </Field>

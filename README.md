@@ -29,6 +29,9 @@ fast chat window, so you can use them the way you'd use ChatGPT, just offline an
   to a server.
 - **Works with Ollama and LM Studio,** or both at once. ZAP starts them for you, and you can
   download Ollama models right inside the app.
+- **Optional cloud models:** add your own API key for OpenAI, Anthropic, Google Gemini, OpenRouter,
+  Groq, Mistral, DeepSeek, xAI or any OpenAI-compatible server, and use those models next to your
+  local ones.
 - **Fast chat:** answers stream in live, with Markdown, code highlighting, copy, edit, regenerate
   and several chats running at the same time.
 - **Files and images:** attach text and code files to any chat, and images for models that can see
@@ -105,6 +108,10 @@ that really come from this project. You can turn the automatic check off, or che
   `%APPDATA%\app.zap.chat`.
 - The AI models run locally through Ollama or LM Studio. ZAP only talks to them on your own
   computer.
+- **Cloud models are the exception, and only when you add one:** chats and ZAP runs that use a
+  cloud model send their messages, attachments and tool results to that provider. API keys are
+  stored in the Windows Credential Manager and only sent to the provider over HTTPS (or to your own
+  server on this PC or your network).
 - ZAP goes online only for:
   - **the update check** (asks GitHub whether there's a new version), which you can turn off;
   - **web search**, only when you turn it on. Your search terms go to the search service you

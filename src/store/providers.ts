@@ -11,6 +11,14 @@ import {
   type Statuses,
 } from "../lib/ipc";
 import { engineName, t } from "../lib/i18n";
+import { modelProvider } from "../lib/ipc";
+
+/** Whether a model can answer now: its engine runs, or it's a cloud model. */
+export function modelReady(statuses: Statuses, key: string | null): boolean {
+  if (!key) return false;
+  const source = modelProvider(key);
+  return source === "cloud" || statuses[source] === "running";
+}
 
 export interface EngineInstall {
   phase: InstallPhase;

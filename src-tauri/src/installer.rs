@@ -22,6 +22,8 @@ fn package_id(kind: ProviderKind) -> &'static str {
     match kind {
         ProviderKind::Ollama => "Ollama.Ollama",
         ProviderKind::Lmstudio => "ElementLabs.LMStudio",
+        // Nothing to install for cloud providers.
+        ProviderKind::Cloud => "",
     }
 }
 

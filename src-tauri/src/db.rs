@@ -344,6 +344,8 @@ pub struct Settings {
     pub zap_notifications: bool,
     /// Unload models after this many idle minutes; `None` = engine default.
     pub model_idle_minutes: Option<u32>,
+    /// Cloud model providers (keys are in the Credential Manager).
+    pub cloud_providers: Vec<CloudConnection>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -405,6 +407,7 @@ impl Default for Settings {
             autostart: false,
             zap_notifications: true,
             model_idle_minutes: None,
+            cloud_providers: Vec::new(),
         }
     }
 }
@@ -945,6 +948,21 @@ pub struct ZapTools {
     pub terminal: bool,
     /// Open apps, files and links.
     pub apps: bool,
+}
+
+/// A cloud provider the user added (see `cloud.rs`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct CloudConnection {
+    pub id: String,
+    /// "openai" | "anthropic" | "gemini" | "openrouter" | "groq" | "mistral" |
+    /// "deepseek" | "xai" | "custom"
+    pub preset: String,
+    /// Shown in the model picker.
+    pub name: String,
+    /// Only for "custom": the OpenAI-compatible base URL (…/v1).
+    pub base_url: String,
+    pub enabled: bool,
 }
 
 /// When a ZAP starts by itself.

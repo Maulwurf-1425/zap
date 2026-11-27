@@ -26,12 +26,16 @@ pub struct AppState {
     pub http: reqwest::Client,
     /// Optional web tools (search, page reading); browser UA, public hosts only.
     pub web: reqwest::Client,
+    /// Cloud model providers (the user's API keys; public HTTPS or own servers).
+    pub cloud: reqwest::Client,
     pub db: Mutex<Connection>,
     pub statuses: Mutex<Statuses>,
     /// Only set when ZAP spawned `ollama serve` itself.
     pub child: Mutex<Option<Child>>,
     pub starting_ollama: AtomicBool,
     pub starting_lmstudio: AtomicBool,
+    /// Never set: cloud providers have nothing to start.
+    pub starting_cloud: AtomicBool,
     /// Per-chat stream cancellation, tagged with a generation so a finished
     /// stream never removes the token of a newer one.
     pub chat_tokens: Mutex<HashMap<String, (u64, CancellationToken)>>,
@@ -66,6 +70,11 @@ impl AppState {
         Self {
             http,
             web: crate::web::client(),
+            cloud: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .user_agent(concat!("ZAP/", env!("CARGO_PKG_VERSION")))
+                .build()
+                .expect("failed to build cloud client"),
             db: Mutex::new(db),
             statuses: Mutex::new(Statuses {
                 ollama: ProviderStatus::Starting,
@@ -74,6 +83,7 @@ impl AppState {
             child: Mutex::new(None),
             starting_ollama: AtomicBool::new(false),
             starting_lmstudio: AtomicBool::new(false),
+            starting_cloud: AtomicBool::new(false),
             chat_tokens: Mutex::new(HashMap::new()),
             pull_tokens: Mutex::new(HashMap::new()),
             next_generation: AtomicU64::new(0),
@@ -97,6 +107,7 @@ impl AppState {
         match kind {
             ProviderKind::Ollama => &self.starting_ollama,
             ProviderKind::Lmstudio => &self.starting_lmstudio,
+            ProviderKind::Cloud => &self.starting_cloud,
         }
     }
 

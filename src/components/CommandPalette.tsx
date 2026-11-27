@@ -121,7 +121,7 @@ export function CommandPalette({ onToggleSidebar }: { onToggleSidebar: () => voi
                 onSelect={() => run(() => setChatModel(m.id))}
               >
                 <Cpu {...ICON} /> <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                <span className="text-caption font-normal text-fg-muted">{engineName(m.provider)}</span>
+                <span className="text-caption font-normal text-fg-muted">{m.source ?? engineName(m.provider)}</span>
               </Command.Item>
             ))}
           </Command.Group>

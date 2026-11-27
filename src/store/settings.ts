@@ -54,6 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   zap_notifications: true,
   model_idle_minutes: null,
+  cloud_providers: [],
 };
 
 /** Fields the appearance tab's reset button restores. */

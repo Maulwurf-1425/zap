@@ -382,6 +382,7 @@ impl ChatProvider for Ollama<'_> {
                 provider: ProviderKind::Ollama,
                 size_bytes: m.size,
                 modified_at: Some(m.modified_at),
+                source: None,
             })
             .collect();
         models.sort_by(|a, b| a.name.cmp(&b.name));

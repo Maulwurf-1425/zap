@@ -454,7 +454,8 @@ export const useChats = create<ChatsState>((set, get) => {
       if (!id) return;
       const chat = get().chats.find((c) => c.id === id);
       const models = useModels.getState();
-      if (chat?.model && models.installed.some((m) => m.name === chat.model)) {
+      // Chats store the model key (LM Studio and cloud keys differ from the name).
+      if (chat?.model && models.installed.some((m) => m.id === chat.model || m.name === chat.model)) {
         models.select(chat.model);
       }
       if (get().messages[id] || get().generating[id]) return;

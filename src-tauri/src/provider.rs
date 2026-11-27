@@ -7,6 +7,7 @@ use std::future::Future;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
+use crate::cloud::Cloud;
 use crate::error::AppResult;
 use crate::lmstudio::LmStudio;
 use crate::ollama::Ollama;
@@ -16,13 +17,17 @@ use crate::ollama::Ollama;
 pub enum ProviderKind {
     Ollama,
     Lmstudio,
+    /// Cloud models with the user's API keys (see `cloud.rs`).
+    Cloud,
 }
 
 impl ProviderKind {
+    /// The local engines ZAP starts and watches.
     pub const ALL: [ProviderKind; 2] = [ProviderKind::Ollama, ProviderKind::Lmstudio];
 }
 
 const LMSTUDIO_PREFIX: &str = "lmstudio::";
+const CLOUD_PREFIX: &str = "cloud::";
 
 /// Model keys: Ollama models keep their plain name (e.g. `llama3.2:3b`, as
 /// stored by older versions); LM Studio models are `lmstudio::<id>`.
@@ -30,14 +35,18 @@ pub fn model_key(kind: ProviderKind, name: &str) -> String {
     match kind {
         ProviderKind::Ollama => name.to_string(),
         ProviderKind::Lmstudio => format!("{LMSTUDIO_PREFIX}{name}"),
+        ProviderKind::Cloud => format!("{CLOUD_PREFIX}{name}"),
     }
 }
 
 pub fn parse_model_key(key: &str) -> (ProviderKind, &str) {
-    match key.strip_prefix(LMSTUDIO_PREFIX) {
-        Some(name) => (ProviderKind::Lmstudio, name),
-        None => (ProviderKind::Ollama, key),
+    if let Some(name) = key.strip_prefix(LMSTUDIO_PREFIX) {
+        return (ProviderKind::Lmstudio, name);
     }
+    if let Some(name) = key.strip_prefix(CLOUD_PREFIX) {
+        return (ProviderKind::Cloud, name);
+    }
+    (ProviderKind::Ollama, key)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -58,10 +67,12 @@ pub struct Statuses {
 }
 
 impl Statuses {
+    /// Cloud providers have no local server: they count as running.
     pub fn get(&self, kind: ProviderKind) -> ProviderStatus {
         match kind {
             ProviderKind::Ollama => self.ollama,
             ProviderKind::Lmstudio => self.lmstudio,
+            ProviderKind::Cloud => ProviderStatus::Running,
         }
     }
 
@@ -69,6 +80,7 @@ impl Statuses {
         match kind {
             ProviderKind::Ollama => self.ollama = status,
             ProviderKind::Lmstudio => self.lmstudio = status,
+            ProviderKind::Cloud => {}
         }
     }
 }
@@ -230,6 +242,9 @@ pub struct ModelInfo {
     /// 0 when the provider does not report a size.
     pub size_bytes: u64,
     pub modified_at: Option<String>,
+    /// Cloud models: the connection's name (e.g. "OpenAI").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 pub trait ChatProvider {
@@ -265,6 +280,7 @@ pub trait ChatProvider {
 pub enum AnyProvider<'a> {
     Ollama(Ollama<'a>),
     LmStudio(LmStudio<'a>),
+    Cloud(Cloud<'a>),
 }
 
 impl ChatProvider for AnyProvider<'_> {
@@ -272,6 +288,7 @@ impl ChatProvider for AnyProvider<'_> {
         match self {
             AnyProvider::Ollama(p) => p.list_models().await,
             AnyProvider::LmStudio(p) => p.list_models().await,
+            AnyProvider::Cloud(p) => p.list_models().await,
         }
     }
 
@@ -296,6 +313,10 @@ impl ChatProvider for AnyProvider<'_> {
                 p.chat_stream(model, messages, options, tools, cancel, on_token)
                     .await
             }
+            AnyProvider::Cloud(p) => {
+                p.chat_stream(model, messages, options, tools, cancel, on_token)
+                    .await
+            }
         }
     }
 
@@ -308,6 +329,7 @@ impl ChatProvider for AnyProvider<'_> {
         match self {
             AnyProvider::Ollama(p) => p.complete(model, messages, options).await,
             AnyProvider::LmStudio(p) => p.complete(model, messages, options).await,
+            AnyProvider::Cloud(p) => p.complete(model, messages, options).await,
         }
     }
 
@@ -315,6 +337,7 @@ impl ChatProvider for AnyProvider<'_> {
         match self {
             AnyProvider::Ollama(p) => p.capabilities(model).await,
             AnyProvider::LmStudio(p) => p.capabilities(model).await,
+            AnyProvider::Cloud(p) => p.capabilities(model).await,
         }
     }
 }

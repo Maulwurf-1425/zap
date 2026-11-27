@@ -4,6 +4,34 @@ Each release has a `## <version>` heading, optionally followed by ` – <update 
 and one `### English` and one `### Deutsch` section. The release workflow publishes the
 section of the tagged version, and ZAP shows it before and after updating.
 
+## 0.5.1 – Cloud Models
+
+### English
+
+- **Cloud models with your own API key:** use models from OpenAI, Anthropic, Google Gemini,
+  OpenRouter, Groq, Mistral, DeepSeek and xAI, or any OpenAI-compatible server of your own. Add a
+  provider under Settings → Models → Cloud models, paste your key and ZAP tests it right away.
+- **Works everywhere:** cloud models show up in the model picker next to your local ones and work in
+  chats and ZAPs, with tools, images and token counts.
+- **Your key stays safe:** keys are kept in the Windows Credential Manager, never in ZAP's database,
+  and only sent to the provider over HTTPS.
+- **Clear messages:** ZAP tells you when a key is rejected or a provider's limit is reached.
+- **Fix:** chats with LM Studio models now reopen with the right model.
+
+### Deutsch
+
+- **Cloud-Modelle mit deinem eigenen API-Key:** Nutze Modelle von OpenAI, Anthropic, Google Gemini,
+  OpenRouter, Groq, Mistral, DeepSeek und xAI oder einen eigenen OpenAI-kompatiblen Server. Füge
+  einen Anbieter unter Einstellungen → Modelle → Cloud-Modelle hinzu, füg deinen Key ein, und ZAP
+  testet ihn sofort.
+- **Funktioniert überall:** Cloud-Modelle stehen in der Modellauswahl neben deinen lokalen und
+  funktionieren in Chats und ZAPs, mit Tools, Bildern und Token-Zählung.
+- **Dein Key bleibt sicher:** Keys liegen in der Windows-Anmeldeinformationsverwaltung, nie in ZAPs
+  Datenbank, und gehen nur per HTTPS an den Anbieter.
+- **Klare Meldungen:** ZAP sagt dir, wenn ein Key abgelehnt wird oder das Limit eines Anbieters
+  erreicht ist.
+- **Korrektur:** Chats mit LM-Studio-Modellen öffnen sich jetzt wieder mit dem richtigen Modell.
+
 ## 0.5.0 – Welcome ZAPs!
 
 ### English

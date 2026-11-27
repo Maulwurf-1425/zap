@@ -25,17 +25,17 @@ import { DotBolt } from "./Brand";
 import {
   modelLabel,
   parseStats,
-  PROVIDERS,
   type Zap,
   type ZapRun,
   type ZapSchedule,
   type ZapScheduleKind,
   type ZapTools,
 } from "../lib/ipc";
-import { engineName, locale, t } from "../lib/i18n";
+import { locale, t } from "../lib/i18n";
 import { formatBytes, formatTokens } from "../lib/format";
 import { parseTools } from "../store/chats";
 import { useVramInfo, vramShortfall } from "../lib/vram";
+import { groupModels } from "../lib/modelGroups";
 import { useModels } from "../store/models";
 import { useUi } from "../store/ui";
 import {
@@ -562,16 +562,14 @@ function EditorForm({ initial, onClose }: { initial: Zap; onClose: () => void })
             icon={<Cpu size={16} strokeWidth={1.75} className="flex-none text-fg-muted" aria-hidden="true" />}
             options={[
               { options: [{ value: "", label: e.modelDefault }] },
-              ...PROVIDERS.map((kind) => ({
-                label: engineName(kind),
-                options: installed
-                  .filter((m) => m.provider === kind)
-                  .map((m) => ({
-                    value: m.id,
-                    label: m.name,
-                    hint: m.size_bytes > 0 ? formatBytes(m.size_bytes) : undefined,
-                  })),
-              })).filter((g) => g.options.length > 0),
+              ...groupModels(installed).map((g) => ({
+                label: g.label,
+                options: g.models.map((m) => ({
+                  value: m.id,
+                  label: m.name,
+                  hint: m.size_bytes > 0 ? formatBytes(m.size_bytes) : undefined,
+                })),
+              })),
             ]}
           />
         </Field>

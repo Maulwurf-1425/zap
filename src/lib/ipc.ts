@@ -16,6 +16,8 @@ export type ErrorCode =
   | "unsupported"
   | "tool_format"
   | "provider_error"
+  | "auth_failed"
+  | "rate_limited"
   | "generic";
 
 export interface AppError {
@@ -172,26 +174,67 @@ export interface SearchHit {
   snippet: string | null;
 }
 
+/** Where a model runs: a local engine, or a cloud provider with an API key. */
+export type ModelSource = ProviderKind | "cloud";
+
 export interface ModelInfo {
-  /** Model key: Ollama name, or `lmstudio::<id>`. */
+  /** Model key: Ollama name, `lmstudio::<id>` or `cloud::<connection>::<model>`. */
   id: string;
   name: string;
-  provider: ProviderKind;
+  provider: ModelSource;
   /** 0 when the provider does not report a size. */
   size_bytes: number;
   modified_at: string | null;
+  /** Cloud models: the connection's name (e.g. "OpenAI"). */
+  source?: string;
 }
 
 const LMSTUDIO_PREFIX = "lmstudio::";
+const CLOUD_PREFIX = "cloud::";
 
 /** Provider of a model key (mirrors provider::parse_model_key in Rust). */
-export function modelProvider(key: string): ProviderKind {
-  return key.startsWith(LMSTUDIO_PREFIX) ? "lmstudio" : "ollama";
+export function modelProvider(key: string): ModelSource {
+  if (key.startsWith(LMSTUDIO_PREFIX)) return "lmstudio";
+  if (key.startsWith(CLOUD_PREFIX)) return "cloud";
+  return "ollama";
 }
 
 /** Human-readable model name without the provider prefix. */
 export function modelLabel(key: string): string {
-  return key.startsWith(LMSTUDIO_PREFIX) ? key.slice(LMSTUDIO_PREFIX.length) : key;
+  if (key.startsWith(LMSTUDIO_PREFIX)) return key.slice(LMSTUDIO_PREFIX.length);
+  if (key.startsWith(CLOUD_PREFIX)) {
+    const rest = key.slice(CLOUD_PREFIX.length);
+    const sep = rest.indexOf("::");
+    return sep >= 0 ? rest.slice(sep + 2) : rest;
+  }
+  return key;
+}
+
+/** Cloud connection id of a model key, or null for local models. */
+export function cloudConnectionOf(key: string): string | null {
+  if (!key.startsWith(CLOUD_PREFIX)) return null;
+  const rest = key.slice(CLOUD_PREFIX.length);
+  const sep = rest.indexOf("::");
+  return sep >= 0 ? rest.slice(0, sep) : null;
+}
+
+export type CloudPreset =
+  "openai" | "anthropic" | "gemini" | "openrouter" | "groq" | "mistral" | "deepseek" | "xai" | "custom";
+
+/** A cloud provider the user added (the API key lives in the Windows Credential Manager). */
+export interface CloudConnection {
+  id: string;
+  preset: CloudPreset;
+  name: string;
+  /** Only for "custom": OpenAI-compatible base URL (…/v1). */
+  base_url: string;
+  enabled: boolean;
+}
+
+export interface CloudTest {
+  models: number | null;
+  /** "auth_failed" | "rate_limited" | "provider_unreachable" | "bad_url" | "no_key" | … */
+  error: string | null;
 }
 
 export interface ModelDetails {
@@ -272,6 +315,8 @@ export interface Settings {
   zap_notifications: boolean;
   /** Unload models after this many idle minutes; null = engine default. */
   model_idle_minutes: number | null;
+  /** Cloud model providers (keys are stored separately). */
+  cloud_providers: CloudConnection[];
 }
 
 /** Tool families a ZAP may use. */
@@ -644,6 +689,9 @@ export const api = {
   answerApproval: (id: string, decision: ApprovalDecision) => invoke<void>("answer_approval", { id, decision }),
 
   systemUsage: () => invoke<SystemUsage>("system_usage"),
+  cloudKeyStatus: () => invoke<{ id: string; has_key: boolean }[]>("cloud_key_status"),
+  cloudSetKey: (id: string, key: string | null) => invoke<void>("cloud_set_key", { id, key }),
+  cloudTest: (id: string) => invoke<CloudTest>("cloud_test", { id }),
   loadedModels: () => invoke<LoadedModel[]>("loaded_models"),
   gpuMemory: () => invoke<{ total: number | null; used: number | null }>("gpu_memory"),
   unloadModels: (model: string | null) => invoke<boolean>("unload_models", { model }),

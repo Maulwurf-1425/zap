@@ -364,6 +364,7 @@ pub async fn unload_models(state: State<'_, AppState>, model: Option<String>) ->
         ok &= match m.provider {
             ProviderKind::Ollama => ollama::unload(&state.http, name).await,
             ProviderKind::Lmstudio => lmstudio::unload(Some(name)).await,
+            ProviderKind::Cloud => true,
         };
     }
     Ok(ok)

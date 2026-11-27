@@ -261,6 +261,9 @@ export const de: Strings = {
     diskFull: "Nicht genug Speicherplatz. Mach etwas Platz frei und versuch's nochmal.",
     invalidFile: "Die Datei konnte nicht gelesen werden. Ist es ein ZAP-Export?",
     unsupported: "Das unterstützt diese Engine nicht.",
+    authFailed: "Der API-Key wurde abgelehnt. Prüf ihn unter Einstellungen → Modelle → Cloud-Modelle.",
+    rateLimited:
+      "Das Limit des Anbieters ist erreicht (zu viele Anfragen oder kein Guthaben mehr). Versuch es später noch mal.",
     toolFormat:
       "Dieses Modell kann Werkzeuge nicht zuverlässig aufrufen. Versuch's nochmal oder nimm z. B. qwen2.5, qwen3 oder llama3.1 (keinen Finetune).",
     cancelled: "Abgebrochen.",
@@ -1019,6 +1022,57 @@ export const de: Strings = {
     session: (input: string, output: string) => `Seit dem Start: ${input} rein · ${output} raus`,
     noGpu: "GPU-Werte sind auf diesem PC nicht verfügbar.",
     hint: "Enthält ZAPs Fenster, seine Hilfsprozesse, die Modell-Engines und SearXNG.",
+  },
+
+  cloud: {
+    title: "Cloud",
+    section: "Cloud-Modelle",
+    intro:
+      "Nutze Modelle von OpenAI, Anthropic, Google und anderen mit deinem eigenen API-Key. Sie funktionieren in Chats und ZAPs wie lokale Modelle.",
+    privacy:
+      "Mit einem Cloud-Modell gehen deine Nachrichten, Anhänge und Tool-Ergebnisse an diesen Anbieter und werden dort verarbeitet. Lokale Modelle bleiben auf deinem PC.",
+    add: "Anbieter hinzufügen",
+    presets: {
+      openai: "OpenAI",
+      anthropic: "Anthropic",
+      gemini: "Google Gemini",
+      openrouter: "OpenRouter",
+      groq: "Groq",
+      mistral: "Mistral",
+      deepseek: "DeepSeek",
+      xai: "xAI",
+      custom: "Andere (OpenAI-kompatibel)",
+    },
+    name: "Name",
+    namePlaceholder: "z. B. Mein Server",
+    baseUrl: "Adresse",
+    baseUrlHint:
+      "Die OpenAI-kompatible Adresse, endet auf /v1. HTTPS oder ein Server auf diesem PC bzw. in deinem Netzwerk.",
+    key: "API-Key",
+    keyPlaceholder: "Key einfügen",
+    keyOptional: "API-Key (optional)",
+    keySaved: "Key gespeichert",
+    keyMissing: "Noch kein Key",
+    replaceKey: "Key ersetzen",
+    getKey: "Key holen",
+    save: "Speichern und testen",
+    cancel: "Abbrechen",
+    test: "Testen",
+    testing: "Teste …",
+    remove: "Entfernen",
+    removeTitle: "Anbieter entfernen",
+    removeBody: (name: string) => `${name} entfernen? Der API-Key wird auch von diesem PC gelöscht.`,
+    enabled: "Diesen Anbieter nutzen",
+    models: (n: number) => (n === 1 ? "1 Modell verfügbar" : `${n} Modelle verfügbar`),
+    errors: {
+      auth_failed: "Key abgelehnt. Prüf, ob er vollständig und aktiv ist.",
+      rate_limited: "Limit erreicht oder kein Guthaben mehr.",
+      provider_unreachable: "Nicht erreichbar. Prüf deine Internetverbindung oder die Adresse.",
+      bad_url: "Ungültige Adresse. Sie muss mit https:// beginnen (oder http:// für diesen PC bzw. dein Netzwerk).",
+      no_key: "Gib zuerst einen API-Key ein.",
+      model_not_found: "Adresse nicht gefunden. Prüf, ob sie auf /v1 endet.",
+    },
+    badge: "Cloud",
   },
 
   toast: {

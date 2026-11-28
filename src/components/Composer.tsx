@@ -13,6 +13,8 @@ import { IconButton } from "./ui/IconButton";
 import { AttachmentError, attachmentFromBase64, readAttachment, type Attachment } from "../lib/attachments";
 import { api, toAppError, type FileHit } from "../lib/ipc";
 import { t } from "../lib/i18n";
+import { isSendKey } from "../lib/shortcuts";
+import { useSendKey } from "../lib/useShortcut";
 
 const MAX_LINES = 8;
 const NO_ATTACHMENTS: Attachment[] = [];
@@ -49,6 +51,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   { generating, disabled, onSend, onStop },
   ref,
 ) {
+  const sendKey = useSendKey();
   const draftKey = useChats((s) => s.activeId ?? NEW_CHAT_DRAFT);
   const text = useChats((s) => s.drafts[draftKey] ?? "");
   const attachments = useChats((s) => s.pendingAttachments[draftKey] ?? NO_ATTACHMENTS);
@@ -312,7 +315,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               return;
             }
           }
-          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+          if (isSendKey({ ...e, isComposing: e.nativeEvent.isComposing }, sendKey)) {
             e.preventDefault();
             send();
           }

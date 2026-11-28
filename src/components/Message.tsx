@@ -13,6 +13,8 @@ import { MessageAttachments } from "./Attachments";
 import { ReadAloudButton } from "./Voice";
 import { useVoice } from "../store/voice";
 import { t } from "../lib/i18n";
+import { isSendKey } from "../lib/shortcuts";
+import { useSendKey } from "../lib/useShortcut";
 
 interface MessageItemProps {
   message: UiMessage;
@@ -178,6 +180,7 @@ function EditBox({
   hasLaterMessages: boolean;
   onDone: () => void;
 }) {
+  const sendKey = useSendKey();
   const editMessage = useChats((s) => s.editMessage);
   const askConfirm = useUi((s) => s.askConfirm);
   const [text, setText] = useState(message.content);
@@ -228,7 +231,7 @@ function EditBox({
         className="chat-text w-full resize-none bg-transparent text-fg outline-none focus-visible:outline-none"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+          if (isSendKey({ ...e, isComposing: e.nativeEvent.isComposing }, sendKey)) {
             e.preventDefault();
             submit();
           }

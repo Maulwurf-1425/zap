@@ -38,6 +38,7 @@ import { api, type Chat, type ChatGroup, type ChatUsage, type SearchHit } from "
 import { formatTokens, groupChats, type ChatGroups } from "../lib/format";
 import { chatTitle, focusComposer } from "../lib/actions";
 import { t } from "../lib/i18n";
+import { useShortcut } from "../lib/useShortcut";
 
 const GROUP_ORDER: (keyof ChatGroups)[] = ["pinned", "today", "yesterday", "week", "older"];
 const SEARCH_DEBOUNCE = 150;
@@ -49,6 +50,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ overlay, onNavigate, onToggle }: SidebarProps) {
+  const sidebarKeys = useShortcut("sidebar");
+  const settingsKeys = useShortcut("settings");
   const chats = useChats((s) => s.chats);
   const loaded = useChats((s) => s.chatsLoaded);
   const newChat = useChats((s) => s.newChat);
@@ -113,7 +116,13 @@ export function Sidebar({ overlay, onNavigate, onToggle }: SidebarProps) {
         data-tauri-drag-region
       >
         <Logo />
-        <IconButton label={t.sidebar.collapse} shortcut="Ctrl+B" side="bottom" className="size-8" onClick={onToggle}>
+        <IconButton
+          label={t.sidebar.collapse}
+          shortcut={sidebarKeys}
+          side="bottom"
+          className="size-8"
+          onClick={onToggle}
+        >
           <PanelLeftClose size={16} strokeWidth={1.75} />
         </IconButton>
       </div>
@@ -222,7 +231,7 @@ export function Sidebar({ overlay, onNavigate, onToggle }: SidebarProps) {
         >
           <Columns3 size={20} strokeWidth={1.75} />
         </IconButton>
-        <IconButton label={t.sidebar.settings} shortcut="Ctrl+," onClick={() => openSettings()}>
+        <IconButton label={t.sidebar.settings} shortcut={settingsKeys} onClick={() => openSettings()}>
           <Settings size={20} strokeWidth={1.75} />
         </IconButton>
       </div>

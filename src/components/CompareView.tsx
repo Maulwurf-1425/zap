@@ -10,6 +10,8 @@ import { groupModels } from "../lib/modelGroups";
 import { copyText, formatTokens } from "../lib/format";
 import { useModels } from "../store/models";
 import { MAX_COMPARE, useCompare, type CompareColumn } from "../store/compare";
+import { isSendKey } from "../lib/shortcuts";
+import { useSendKey } from "../lib/useShortcut";
 
 function seconds(ms: number): string {
   return ms < 10_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms / 1000)} s`;
@@ -17,6 +19,7 @@ function seconds(ms: number): string {
 
 /** Same question to several models, answers side by side with their numbers. */
 export function CompareView() {
+  const sendKey = useSendKey();
   const installed = useModels((s) => s.installed);
   const selected = useModels((s) => s.selected);
   const { models, prompt, parallel, columns, running } = useCompare();
@@ -129,7 +132,7 @@ export function CompareView() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (isSendKey({ ...e, isComposing: e.nativeEvent.isComposing }, sendKey)) {
                   e.preventDefault();
                   if (canRun) void run();
                 }

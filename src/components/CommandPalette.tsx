@@ -8,11 +8,18 @@ import { useSettings } from "../store/settings";
 import { useUi } from "../store/ui";
 import { api, type SearchHit, type ThemeMode } from "../lib/ipc";
 import { engineName, t, type Language } from "../lib/i18n";
+import { useShortcut } from "../lib/useShortcut";
 
 const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 
 /** Ctrl+K: search chats (incl. message content via FTS) and run actions. */
 export function CommandPalette({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+  const keys = {
+    newChat: useShortcut("newChat"),
+    settings: useShortcut("settings"),
+    sidebar: useShortcut("sidebar"),
+    copyLast: useShortcut("copyLast"),
+  };
   const open = useUi((s) => s.paletteOpen);
   const setOpen = useUi((s) => s.setPaletteOpen);
   const openSettings = useUi((s) => s.openSettings);
@@ -95,19 +102,19 @@ export function CommandPalette({ onToggleSidebar }: { onToggleSidebar: () => voi
             }
           >
             <Plus {...ICON} /> {t.palette.newChat}
-            <span className="kbd ml-auto">Ctrl+N</span>
+            <span className="kbd ml-auto">{keys.newChat}</span>
           </Command.Item>
           <Command.Item className="menu-item" onSelect={() => run(() => openSettings())}>
             <Settings {...ICON} /> {t.palette.settings}
-            <span className="kbd ml-auto">Ctrl+,</span>
+            <span className="kbd ml-auto">{keys.settings}</span>
           </Command.Item>
           <Command.Item className="menu-item" onSelect={() => run(onToggleSidebar)}>
             <PanelLeft {...ICON} /> {t.palette.toggleSidebar}
-            <span className="kbd ml-auto">Ctrl+B</span>
+            <span className="kbd ml-auto">{keys.sidebar}</span>
           </Command.Item>
           <Command.Item className="menu-item" onSelect={() => run(() => void copyLastReply())}>
             <Copy {...ICON} /> {t.palette.copyLast}
-            <span className="kbd ml-auto">Ctrl+Shift+C</span>
+            <span className="kbd ml-auto">{keys.copyLast}</span>
           </Command.Item>
         </Command.Group>
 

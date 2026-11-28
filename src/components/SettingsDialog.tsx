@@ -45,6 +45,8 @@ import { VoiceTab } from "./VoiceSettings";
 import { IdleModelsField, ZapsTab } from "./ZapSettings";
 import { CloudSection } from "./CloudSettings";
 import { KnowledgeTab } from "./KnowledgeSettings";
+import { ShortcutsSection } from "./ShortcutSettings";
+import { formatCombo } from "../lib/shortcuts";
 import { useAvatarCredits } from "../lib/avatars";
 import { useDiscord } from "../store/discord";
 import { CURATED_MODELS, curatedDescription, hasOllamaModel, MODEL_NAME, useModels } from "../store/models";
@@ -212,28 +214,10 @@ function GeneralTab() {
           </button>
         </div>
       </Section>
-      <Section title={t.settings.general.shortcuts}>
-        <dl className="flex flex-col">
-          {t.shortcuts.map(({ keys, label }) => (
-            <div key={label} className="flex h-10 items-center justify-between border-b border-border last:border-0">
-              <dt className="text-ui font-normal">{label}</dt>
-              <dd className="flex gap-1">
-                {keys.map((k) => (
-                  <kbd key={k} className="kbd">
-                    {k}
-                  </kbd>
-                ))}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </Section>
+      <ShortcutsSection />
     </div>
   );
 }
-
-/** "Playing ZAP" in Discord; hidden in builds without a Discord app id. */
-const QUICK_SHORTCUTS = ["Alt+Space", "Ctrl+Space", "Ctrl+Alt+Space", "Ctrl+Shift+Space", "Alt+Q"];
 
 function QuickAskSection() {
   const settings = useSettings((s) => s.settings);
@@ -251,7 +235,7 @@ function QuickAskSection() {
           <label htmlFor="quick-enabled" className="text-ui">
             {q.enable}
           </label>
-          <p className="text-caption text-fg-muted">{q.enableHint(settings.quick_ask_shortcut)}</p>
+          <p className="text-caption text-fg-muted">{q.enableHint(formatCombo(settings.quick_ask_shortcut, t.keys))}</p>
         </div>
         <Switch
           id="quick-enabled"
@@ -260,20 +244,11 @@ function QuickAskSection() {
           onChange={(on) => void apply({ quick_ask_enabled: on })}
         />
       </div>
-      {settings.quick_ask_enabled && (
-        <Field label={q.shortcut} htmlFor="quick-shortcut" hint={q.shortcutHint}>
-          <Select
-            id="quick-shortcut"
-            value={settings.quick_ask_shortcut}
-            onChange={(v) => void apply({ quick_ask_shortcut: v })}
-            options={QUICK_SHORTCUTS.map((s) => ({ value: s, label: s.replace("Ctrl", q.ctrl) }))}
-          />
-        </Field>
-      )}
     </Section>
   );
 }
 
+/** "Playing ZAP" in Discord; hidden in builds without a Discord app id. */
 function DiscordSection() {
   const available = useDiscord((s) => s.available);
   const connected = useDiscord((s) => s.connected);

@@ -60,6 +60,8 @@ export const DEFAULT_SETTINGS: Settings = {
   knowledge_folders: [],
   knowledge_model: "nomic-embed-text",
   knowledge_enabled: false,
+  shortcuts: {},
+  send_key: "enter",
 };
 
 /** Fields the appearance tab's reset button restores. */

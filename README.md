@@ -158,6 +158,9 @@ that really come from this project. You can turn the automatic check off, or che
 | Esc                 | Stop the answer / close             |
 | Enter / Shift+Enter | Send / new line                     |
 
+All of these except Esc can be changed under Settings → General, including whether Enter or
+Shift+Enter sends a message.
+
 ## Troubleshooting
 
 **ZAP says the engine wasn't found.**

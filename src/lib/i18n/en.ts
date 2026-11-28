@@ -16,7 +16,8 @@ export const en = {
 
   composer: {
     placeholder: "Type something …",
-    hint: "Enter to send · Shift+Enter for new line",
+    hint: (shiftSends: boolean): string =>
+      shiftSends ? "Shift+Enter to send · Enter for new line" : "Enter to send · Shift+Enter for new line",
     hintGenerating: "ZAP is thinking … · Esc stops",
     send: "Send message",
     stop: "Stop reply",
@@ -429,6 +430,20 @@ export const en = {
       onboardingHint: "Shows the three setup steps again.",
       onboardingCta: "Start tour",
       shortcuts: "Keyboard shortcuts",
+      shortcutsHint: "Click a shortcut and press the new keys.",
+      sendKey: "Send messages with",
+      sendEnter: "Shift+Enter makes a new line.",
+      sendShiftEnter: "Enter makes a new line.",
+      record: "Press keys …",
+      change: (action: string) => `Change the shortcut for ${action}`,
+      reset: "Reset",
+      resetAll: "Reset all",
+      fixed: "Can't be changed",
+      problems: {
+        needs_modifier: "Hold Ctrl or Alt and press a key (F keys work alone).",
+        reserved: "That one is needed for editing text.",
+      } as Record<string, string>,
+      conflict: (action: string) => `Already used for “${action}”.`,
     },
     appearance: {
       theme: "Theme",
@@ -767,17 +782,19 @@ export const en = {
     language: (name: string) => `Language: ${name}`,
   },
 
-  shortcuts: [
-    { keys: ["Ctrl", "N"], label: "New chat" },
-    { keys: ["Ctrl", "K"], label: "Command palette" },
-    { keys: ["Ctrl", "B"], label: "Toggle sidebar" },
-    { keys: ["Ctrl", ","], label: "Settings" },
-    { keys: ["Ctrl", "Shift", "C"], label: "Copy last reply" },
-    { keys: ["Ctrl", "↑ / ↓"], label: "Switch chat" },
-    { keys: ["Alt", "Space"], label: "Quick ask (anywhere)" },
-    { keys: ["F5"], label: "Resources" },
-    { keys: ["Esc"], label: "Stop / close" },
-  ],
+  shortcuts: {
+    newChat: "New chat",
+    palette: "Command palette",
+    sidebar: "Toggle sidebar",
+    settings: "Settings",
+    copyLast: "Copy last reply",
+    prevChat: "Previous chat",
+    nextChat: "Next chat",
+    monitor: "Resources",
+    quickAsk: "Quick ask (anywhere)",
+    stop: "Stop / close",
+  },
+  keys: { ctrl: "Ctrl", space: "Space", up: "↑", down: "↓" },
 
   zaps: {
     scheduleFolder: (folder: string) => `Starts for new files in ${folder}`,
@@ -1126,9 +1143,6 @@ export const en = {
     title: "Quick ask",
     enable: "Quick ask from anywhere",
     enableHint: (keys: string) => `Press ${keys} in any app to ask ZAP without opening it.`,
-    shortcut: "Shortcut",
-    shortcutHint: "Pick another one if an app already uses this shortcut.",
-    ctrl: "Ctrl",
     placeholder: "Ask ZAP anything …",
     followUp: "Ask a follow-up …",
     empty: "Ask a question. The answer appears here; Ctrl+Enter continues it as a chat in ZAP.",

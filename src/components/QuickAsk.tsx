@@ -14,6 +14,8 @@ import { groupModels } from "../lib/modelGroups";
 import { watchSystemTheme } from "../lib/theme";
 import { applySettingsAppearance, useSettings } from "../store/settings";
 import { dateContext } from "../store/chats";
+import { isSendKey } from "../lib/shortcuts";
+import { useSendKey } from "../lib/useShortcut";
 
 const MODEL_KEY = "zap.quickModel";
 /** Room for the model list, which opens upward. */
@@ -67,6 +69,7 @@ async function crop(src: string, x: number, y: number, w: number, h: number): Pr
 /** The window on the global shortcut (see src-tauri/src/quick.rs): ZAP's
  *  chat box at the bottom of the screen, answers above it. */
 export function QuickAsk() {
+  const sendKey = useSendKey();
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [model, setModel] = useState<string | null>(null);
   const [vision, setVision] = useState(false);
@@ -432,7 +435,7 @@ export function QuickAsk() {
               e.target.style.height = `${e.target.scrollHeight}px`;
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.nativeEvent.isComposing) {
+              if (isSendKey({ ...e, isComposing: e.nativeEvent.isComposing }, sendKey)) {
                 e.preventDefault();
                 void ask();
               }

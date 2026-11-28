@@ -12,6 +12,7 @@ import { anyRunning, modelReady, primaryProvider, useProviders } from "../store/
 import { useUi } from "../store/ui";
 import { engineName, t } from "../lib/i18n";
 import { modelProvider } from "../lib/ipc";
+import { useSendKey } from "../lib/useShortcut";
 
 const EMPTY: UiMessage[] = [];
 const BOTTOM_THRESHOLD = 80;
@@ -21,6 +22,7 @@ export interface ChatViewHandle {
 }
 
 export const ChatView = forwardRef<ChatViewHandle>(function ChatView(_props, ref) {
+  const sendKey = useSendKey();
   const activeId = useChats((s) => s.activeId);
   const messages = useChats((s) => (s.activeId ? (s.messages[s.activeId] ?? EMPTY) : EMPTY));
   const loading = useChats((s) => (s.activeId ? Boolean(s.loadingMessages[s.activeId]) : false));
@@ -84,7 +86,7 @@ export const ChatView = forwardRef<ChatViewHandle>(function ChatView(_props, ref
       <MessageList key={activeId} messages={messages} generating={generating} error={error?.code} stickRef={stickRef} />
     );
 
-  let hint: string = t.composer.hint;
+  let hint: string = t.composer.hint(sendKey === "shift_enter");
   const primary = primaryProvider(statuses);
   if (!running) {
     if (!primary) hint = t.engines.noneBody;

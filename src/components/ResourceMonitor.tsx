@@ -5,6 +5,7 @@ import { api, modelLabel, type GroupUsage, type LoadedModel, type SystemUsage } 
 import { formatBytes, formatTokens } from "../lib/format";
 import { engineName, t } from "../lib/i18n";
 import { useUi } from "../store/ui";
+import { useShortcut } from "../lib/useShortcut";
 
 const POLL_MS = 1000;
 /** Samples kept for the sparklines (one per second). */
@@ -90,6 +91,7 @@ export function ResourceMonitor() {
 }
 
 function Panel() {
+  const monitorKeys = useShortcut("monitor");
   const toggle = useUi((s) => s.toggleMonitor);
   const [usage, setUsage] = useState<SystemUsage | null>(null);
   const [cpuHistory, setCpuHistory] = useState<number[]>([]);
@@ -134,7 +136,7 @@ function Panel() {
       <header className="flex items-center gap-2">
         <Activity size={16} strokeWidth={1.75} className="text-coral" aria-hidden="true" />
         <h2 className="flex-1 text-ui font-medium">{m.title}</h2>
-        <kbd className="kbd">F5</kbd>
+        <kbd className="kbd">{monitorKeys}</kbd>
         <button className="btn btn-icon size-7" aria-label={m.close} title={m.close} onClick={toggle}>
           <X size={16} strokeWidth={1.75} />
         </button>

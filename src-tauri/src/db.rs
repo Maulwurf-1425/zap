@@ -376,6 +376,10 @@ pub struct Settings {
     pub knowledge_model: String,
     /// Offer the knowledge search in chats (composer switch).
     pub knowledge_enabled: bool,
+    /// In-app shortcuts changed by the user: action id → combo like "Ctrl+Shift+C".
+    pub shortcuts: std::collections::BTreeMap<String, String>,
+    /// "enter" = Enter sends and Shift+Enter makes a new line, "shift_enter" = the other way round.
+    pub send_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -443,6 +447,8 @@ impl Default for Settings {
             knowledge_folders: Vec::new(),
             knowledge_model: crate::knowledge::DEFAULT_MODEL.into(),
             knowledge_enabled: false,
+            shortcuts: Default::default(),
+            send_key: "enter".into(),
         }
     }
 }

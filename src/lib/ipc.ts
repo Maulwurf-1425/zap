@@ -327,6 +327,10 @@ export interface Settings {
   knowledge_model: string;
   /** Knowledge search in chats (composer switch). */
   knowledge_enabled: boolean;
+  /** In-app shortcuts changed by the user: action id → combo like "Ctrl+Shift+C". */
+  shortcuts: Record<string, string>;
+  /** `enter`: Enter sends, Shift+Enter new line; `shift_enter`: the other way round. */
+  send_key: "enter" | "shift_enter";
 }
 
 /** Tool families a ZAP may use. */

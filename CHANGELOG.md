@@ -24,6 +24,9 @@ section of the tagged version, and ZAP shows it before and after updating.
   apps. Clicking and typing go through the same approval as commands.
 - **Compare models:** ask several models the same question and see their answers side by side,
   with time to the first word, speed and tokens. Open it with the columns button in the sidebar.
+- **Your own shortcuts:** under Settings → General you can now give every keyboard shortcut new
+  keys: click it and press the new combination. You can also choose whether Enter or Shift+Enter
+  sends a message; the other one makes a new line.
 
 ### Deutsch
 
@@ -46,6 +49,9 @@ section of the tagged version, and ZAP shows it before and after updating.
 - **Modelle vergleichen:** Stell mehreren Modellen dieselbe Frage und sieh ihre Antworten
   nebeneinander, mit Zeit bis zum ersten Wort, Tempo und Tokens. Zu finden über den Spalten-Knopf in
   der Seitenleiste.
+- **Eigene Tastenkürzel:** Unter Einstellungen → Allgemein kannst du jedem Tastenkürzel neue Tasten
+  geben: anklicken und die neue Kombination drücken. Außerdem wählst du, ob Enter oder Shift+Enter
+  eine Nachricht abschickt; die andere Taste macht eine neue Zeile.
 
 ## 0.5.1 – Cloud Models
 

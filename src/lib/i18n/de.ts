@@ -17,7 +17,8 @@ export const de: Strings = {
 
   composer: {
     placeholder: "Schreib etwas …", // §9
-    hint: "Enter senden · Shift+Enter Zeile",
+    hint: (shiftSends: boolean) =>
+      shiftSends ? "Shift+Enter senden · Enter Zeile" : "Enter senden · Shift+Enter Zeile",
     hintGenerating: "ZAP denkt nach … · Esc stoppt",
     send: "Nachricht senden",
     stop: "Antwort stoppen",
@@ -431,6 +432,20 @@ export const de: Strings = {
       onboardingHint: "Zeigt die drei Startschritte noch einmal.",
       onboardingCta: "Einführung starten",
       shortcuts: "Tastenkürzel",
+      shortcutsHint: "Klick auf ein Kürzel und drück die neuen Tasten.",
+      sendKey: "Nachrichten senden mit",
+      sendEnter: "Shift+Enter macht eine neue Zeile.",
+      sendShiftEnter: "Enter macht eine neue Zeile.",
+      record: "Tasten drücken …",
+      change: (action: string) => `Kürzel für ${action} ändern`,
+      reset: "Zurücksetzen",
+      resetAll: "Alle zurücksetzen",
+      fixed: "Nicht änderbar",
+      problems: {
+        needs_modifier: "Halte Strg oder Alt und drück eine Taste (F-Tasten gehen allein).",
+        reserved: "Das wird zum Bearbeiten von Text gebraucht.",
+      },
+      conflict: (action: string) => `Schon belegt für „${action}“.`,
     },
     appearance: {
       theme: "Farbschema",
@@ -773,17 +788,19 @@ export const de: Strings = {
     language: (name: string) => `Sprache: ${name}`,
   },
 
-  shortcuts: [
-    { keys: ["Ctrl", "N"], label: "Neuer Chat" },
-    { keys: ["Ctrl", "K"], label: "Befehlspalette" },
-    { keys: ["Ctrl", "B"], label: "Seitenleiste ein/aus" },
-    { keys: ["Ctrl", ","], label: "Einstellungen" },
-    { keys: ["Ctrl", "Shift", "C"], label: "Letzte Antwort kopieren" },
-    { keys: ["Ctrl", "↑ / ↓"], label: "Chat wechseln" },
-    { keys: ["Alt", "Leertaste"], label: "Schnellfrage (überall)" },
-    { keys: ["F5"], label: "Ressourcen" },
-    { keys: ["Esc"], label: "Stoppen / Schließen" },
-  ],
+  shortcuts: {
+    newChat: "Neuer Chat",
+    palette: "Befehlspalette",
+    sidebar: "Seitenleiste ein/aus",
+    settings: "Einstellungen",
+    copyLast: "Letzte Antwort kopieren",
+    prevChat: "Vorheriger Chat",
+    nextChat: "Nächster Chat",
+    monitor: "Ressourcen",
+    quickAsk: "Schnellfrage (überall)",
+    stop: "Stoppen / Schließen",
+  },
+  keys: { ctrl: "Strg", space: "Leertaste", up: "↑", down: "↓" },
 
   zaps: {
     scheduleFolder: (folder: string) => `Startet bei neuen Dateien in ${folder}`,
@@ -1135,9 +1152,6 @@ export const de: Strings = {
     title: "Schnellfrage",
     enable: "Schnellfrage von überall",
     enableHint: (keys: string) => `Drück ${keys} in jeder App und frag ZAP, ohne es zu öffnen.`,
-    shortcut: "Tastenkürzel",
-    shortcutHint: "Wähl ein anderes, falls eine App dieses Kürzel schon nutzt.",
-    ctrl: "Strg",
     placeholder: "Frag ZAP irgendwas …",
     followUp: "Nachfrage stellen …",
     empty: "Stell eine Frage. Die Antwort erscheint hier; Strg+Enter macht daraus einen Chat in ZAP.",

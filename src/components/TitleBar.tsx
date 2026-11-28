@@ -6,6 +6,7 @@ import { IconButton } from "./ui/IconButton";
 import { useChats } from "../store/chats";
 import { t } from "../lib/i18n";
 import { chatTitle } from "../lib/actions";
+import { useShortcut } from "../lib/useShortcut";
 
 // Resolved lazily: outside the Tauri webview (e.g. a browser tab on the dev
 // server) there is no window handle, and the UI must still render.
@@ -31,6 +32,7 @@ const appWindow = {
  *  data-tauri-drag-region). With the sidebar docked, the sidebar's own header
  *  holds logo and toggle, so `showBrand` is false and they are not repeated. */
 export function TitleBar({ onToggleSidebar, showBrand }: { onToggleSidebar: () => void; showBrand: boolean }) {
+  const sidebarKeys = useShortcut("sidebar");
   const chat = useChats((s) => s.chats.find((c) => c.id === s.activeId));
   const [maximized, setMaximized] = useState(false);
 
@@ -55,7 +57,7 @@ export function TitleBar({ onToggleSidebar, showBrand }: { onToggleSidebar: () =
         <div className="flex items-center gap-1 pl-2" data-tauri-drag-region>
           <IconButton
             label={t.window.toggleSidebar}
-            shortcut="Ctrl+B"
+            shortcut={sidebarKeys}
             side="bottom"
             className="size-8"
             onClick={onToggleSidebar}

@@ -25,6 +25,7 @@ import { useVoice } from "./store/voice";
 import { useDiscord } from "./store/discord";
 import { useZaps } from "./store/zaps";
 import { watchSystemTheme } from "./lib/theme";
+import { isRecordingShortcut, matches, shortcutFor, type ShortcutAction } from "./lib/shortcuts";
 
 const COLLAPSE_BELOW = 1000;
 let booted = false;
@@ -183,29 +184,32 @@ export default function App() {
   );
 }
 
-/** Global keyboard shortcuts (see lib/i18n → shortcuts). */
+/** Global keyboard shortcuts (changeable in Settings → General, see lib/shortcuts). */
 function useShortcuts(toggleSidebar: () => void) {
-  // F5 anywhere (even in dialogs) opens the resource monitor instead of
-  // reloading the window.
+  // The resource monitor works anywhere (even in dialogs), and F5 never
+  // reloads the window.
   useEffect(() => {
-    const onF5 = (e: KeyboardEvent) => {
-      if (e.key !== "F5") return;
+    const onMonitor = (e: KeyboardEvent) => {
+      if (isRecordingShortcut()) return;
+      const hit = matches(e, shortcutFor(useSettings.getState().settings, "monitor"));
+      if (!hit && e.key !== "F5") return;
       e.preventDefault();
       e.stopPropagation();
-      if (!e.repeat) useUi.getState().toggleMonitor();
+      if (hit && !e.repeat) useUi.getState().toggleMonitor();
     };
-    window.addEventListener("keydown", onF5, true);
-    return () => window.removeEventListener("keydown", onF5, true);
+    window.addEventListener("keydown", onMonitor, true);
+    return () => window.removeEventListener("keydown", onMonitor, true);
   }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isRecordingShortcut()) return;
       const ui = useUi.getState();
       const chats = useChats.getState();
-      const ctrl = e.ctrlKey || e.metaKey;
-      const key = e.key.toLowerCase();
+      const settings = useSettings.getState().settings;
+      const is = (action: ShortcutAction) => matches(e, shortcutFor(settings, action));
 
-      if (ctrl && key === "k") {
+      if (is("palette")) {
         e.preventDefault();
         ui.setPaletteOpen(!ui.paletteOpen);
         return;
@@ -213,22 +217,22 @@ function useShortcuts(toggleSidebar: () => void) {
       // Everything else backs off while a dialog owns the keyboard.
       if (isOverlayOpen()) return;
 
-      if (ctrl && !e.shiftKey && key === "n") {
+      if (is("newChat")) {
         e.preventDefault();
         chats.newChat();
         focusComposer();
-      } else if (ctrl && key === "b") {
+      } else if (is("sidebar")) {
         e.preventDefault();
         toggleSidebar();
-      } else if (ctrl && e.key === ",") {
+      } else if (is("settings")) {
         e.preventDefault();
         ui.openSettings();
-      } else if (ctrl && e.shiftKey && key === "c") {
+      } else if (is("copyLast")) {
         e.preventDefault();
         void chats.copyLastReply();
-      } else if (ctrl && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      } else if (is("prevChat") || is("nextChat")) {
         e.preventDefault();
-        chats.selectRelative(e.key === "ArrowUp" ? -1 : 1);
+        chats.selectRelative(is("prevChat") ? -1 : 1);
       } else if (e.key === "Escape") {
         if (ui.drawerOpen) ui.setDrawerOpen(false);
         else if (chats.activeId && chats.generating[chats.activeId]) chats.stop();

@@ -27,6 +27,9 @@ section of the tagged version, and ZAP shows it before and after updating.
 - **Your own shortcuts:** under Settings → General you can now give every keyboard shortcut new
   keys: click it and press the new combination. You can also choose whether Enter or Shift+Enter
   sends a message; the other one makes a new line.
+- **Search in the settings:** the settings now open with a search box. Type what you are looking
+  for, e.g. "font size", and ZAP takes you straight to it. The sections on the left are still there
+  for browsing.
 
 ### Deutsch
 
@@ -52,6 +55,9 @@ section of the tagged version, and ZAP shows it before and after updating.
 - **Eigene Tastenkürzel:** Unter Einstellungen → Allgemein kannst du jedem Tastenkürzel neue Tasten
   geben: anklicken und die neue Kombination drücken. Außerdem wählst du, ob Enter oder Shift+Enter
   eine Nachricht abschickt; die andere Taste macht eine neue Zeile.
+- **Suche in den Einstellungen:** Die Einstellungen öffnen jetzt mit einem Suchfeld. Gib ein, was du
+  suchst, z. B. „Schriftgröße“, und ZAP bringt dich direkt hin. Die Bereiche links sind weiterhin da,
+  wenn du lieber stöberst.
 
 ## 0.5.1 – Cloud Models
 

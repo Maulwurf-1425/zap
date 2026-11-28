@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useUpdates } from "./updates";
 
 export type SettingsTab =
+  | "search"
   | "general"
   | "appearance"
   | "models"
@@ -52,7 +53,7 @@ interface UiState {
 
 export const useUi = create<UiState>((set) => ({
   settingsOpen: false,
-  settingsTab: "general",
+  settingsTab: "search",
   paletteOpen: false,
   onboardingOpen: false,
   confirm: null,
@@ -61,7 +62,8 @@ export const useUi = create<UiState>((set) => ({
   monitorOpen: false,
   compareOpen: false,
 
-  openSettings: (tab) => set((s) => ({ settingsOpen: true, settingsTab: tab ?? s.settingsTab, paletteOpen: false })),
+  // Without a tab it starts at the search.
+  openSettings: (tab) => set({ settingsOpen: true, settingsTab: tab ?? "search", paletteOpen: false }),
   closeSettings: () => set({ settingsOpen: false }),
   setSettingsTab: (settingsTab) => set({ settingsTab }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),

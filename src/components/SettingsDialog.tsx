@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { toast } from "sonner";
 import {
@@ -8,6 +8,7 @@ import {
   Database,
   ExternalLink,
   FolderSearch,
+  Search,
   Globe,
   Info,
   MessageSquare,
@@ -46,6 +47,8 @@ import { IdleModelsField, ZapsTab } from "./ZapSettings";
 import { CloudSection } from "./CloudSettings";
 import { KnowledgeTab } from "./KnowledgeSettings";
 import { ShortcutsSection } from "./ShortcutSettings";
+import { SettingsSearch } from "./SettingsSearch";
+import { settingsEntries, type SettingsEntry } from "../lib/settingsIndex";
 import { formatCombo } from "../lib/shortcuts";
 import { useAvatarCredits } from "../lib/avatars";
 import { useDiscord } from "../store/discord";
@@ -90,6 +93,7 @@ import { engineName, errorMessage, t } from "../lib/i18n";
 
 // A function, not a constant: labels must follow the active language.
 const tabs = (): { id: SettingsTab; label: string; icon: typeof Palette }[] => [
+  { id: "search", label: t.settings.tabs.search, icon: Search },
   { id: "general", label: t.settings.tabs.general, icon: SlidersHorizontal },
   { id: "appearance", label: t.settings.tabs.appearance, icon: Palette },
   { id: "models", label: t.settings.tabs.models, icon: Package },
@@ -109,6 +113,39 @@ export function SettingsDialog() {
   const tab = useUi((s) => s.settingsTab);
   const setTab = useUi((s) => s.setSettingsTab);
   const close = useUi((s) => s.closeSettings);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [target, setTarget] = useState<string | null>(null);
+
+  const tabLabel = useCallback((id: SettingsEntry["tab"]) => tabs().find((x) => x.id === id)?.label ?? id, []);
+
+  // After a search pick: find the setting on its tab, scroll to it and let it
+  // light up. Tabs that load data render late, so look a few times.
+  useEffect(() => {
+    if (!target) return;
+    let tries = 0;
+    let timer = 0;
+    const look = () => {
+      const panel = scrollRef.current?.querySelector<HTMLElement>('[role="tabpanel"][data-state="active"]');
+      const match = panel && findSetting(panel, target);
+      if (match) {
+        match.scrollIntoView({ block: "center", behavior: "smooth" });
+        // Keyboard users land on the control itself (the search box is gone).
+        match
+          .querySelector<HTMLElement>(
+            'input, textarea, select, button, [role="slider"], [role="switch"], [role="radio"][data-state="checked"]',
+          )
+          ?.focus({ preventScroll: true });
+        match.classList.remove("settings-flash");
+        void match.offsetWidth; // restart the animation
+        match.classList.add("settings-flash");
+        window.setTimeout(() => match.classList.remove("settings-flash"), 1800);
+        setTarget(null);
+      } else if (++tries < 20) timer = window.setTimeout(look, 100);
+      else setTarget(null);
+    };
+    timer = window.setTimeout(look, 50);
+    return () => window.clearTimeout(timer);
+  }, [target, tab]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()} title={t.settings.title} width={820} height={600}>
@@ -133,7 +170,16 @@ export function SettingsDialog() {
         {/* The outer box clips to the rounded corners, so the scrollbar of
             the inner one never pokes out over them. */}
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg bg-surface-1">
-          <div className="h-full overflow-y-auto px-6 py-5">
+          <div ref={scrollRef} className="h-full overflow-y-auto px-6 py-5">
+            <Tabs.Content value="search" className="outline-none">
+              <SettingsSearch
+                tabLabel={tabLabel}
+                onPick={(entry) => {
+                  setTab(entry.tab);
+                  setTarget(entry.label);
+                }}
+              />
+            </Tabs.Content>
             <Tabs.Content value="general" className="outline-none">
               <GeneralTab />
             </Tabs.Content>
@@ -175,6 +221,31 @@ export function SettingsDialog() {
       </Tabs.Root>
     </Dialog>
   );
+}
+
+/** The heading, label or row that shows this text, best match first. */
+function findSetting(panel: HTMLElement, text: string): HTMLElement | null {
+  const norm = (s: string | null) => (s ?? "").replace(/\s+/g, " ").trim();
+  const candidates = Array.from(panel.querySelectorAll<HTMLElement>("h3, label, dt, .text-ui, span, button"));
+  const hit =
+    candidates.find((el) => norm(el.textContent) === text) ??
+    candidates.find((el) => norm(el.textContent).startsWith(text));
+  if (!hit) return null;
+  // Light up the whole row, not just its words: grow until the box would take
+  // in another setting or leave its section.
+  if (hit.tagName === "H3") return hit.closest("section") ?? hit;
+  const others = new Set(settingsEntries().map((e) => e.label));
+  others.delete(text);
+  let row: HTMLElement = hit;
+  while (row.parentElement && row.parentElement !== panel && row.tagName !== "SECTION") {
+    const parent: HTMLElement = row.parentElement;
+    const crowded = Array.from(parent.querySelectorAll<HTMLElement>("label, dt, .text-ui")).some(
+      (el) => !row.contains(el) && others.has(norm(el.textContent)),
+    );
+    if (crowded) break;
+    row = parent;
+  }
+  return row;
 }
 
 // --- General ----------------------------------------------------------------

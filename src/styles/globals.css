@@ -510,6 +510,24 @@
   }
 }
 
+/* A setting found through the settings search lights up briefly. */
+.settings-flash {
+  border-radius: var(--radius-md, 10px);
+  animation: settings-flash 1.6s var(--ease-state, ease-out);
+}
+
+@keyframes settings-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 2px var(--coral-ring);
+    background-color: color-mix(in srgb, var(--coral-ring) 14%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+    background-color: transparent;
+  }
+}
+
 @keyframes pop-in {
   from {
     opacity: 0;
